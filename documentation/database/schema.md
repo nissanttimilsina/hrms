@@ -1,4 +1,4 @@
-# Database schema — Phase 1
+# Database schema (foundation tables; later tables follow the same conventions, see migrations 004–006)
 
 Source of truth: `backend/src/database/migrations/*.sql` (applied in order, checksummed, advisory-locked).
 

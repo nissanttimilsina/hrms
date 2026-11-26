@@ -1,4 +1,4 @@
-# Architecture — Phase 1 Foundation
+# Architecture
 
 ## 1. System shape
 

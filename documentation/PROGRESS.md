@@ -1,41 +1,56 @@
-# Development progress
+# Status & release readiness
 
-_Last updated: 26 Nov 2026 — Phase 1 (Foundation) complete._
+_Last updated: 26 Nov 2026. Release candidate for the first production deployment._
 
-## Phase 1 — Foundation ✅
+## What ships
 
-| Area | Delivered | Verified by |
-|---|---|---|
-| Architecture | Monorepo layout from the brief; three-role Postgres model; stateless API + BullMQ worker | `documentation/architecture/overview.md` |
-| Database | 3 SQL migrations: 28 tables, composite tenant FKs, check constraints, partial unique indexes, `updated_at` triggers, versioned prices; checksum + advisory-locked migration runner | migrations run twice in CI (idempotent) |
-| Tenant isolation | Host/JWT tenant resolution; `withTenant` transaction-local context; RLS enabled + forced on all 15 tenant tables + self-row policy on `tenants`; fail-closed default; composite FKs | **18** isolation tests (DB + API) |
-| Authentication | Argon2id; JWT access (15 min) + rotating refresh with reuse detection; cookie (httpOnly/Strict) or mobile body transport; CSRF header; lockout; logout / logout-all / per-session revoke with immediate effect via Redis; password reset, change and invitation acceptance; platform-staff auth | **14** auth tests |
-| RBAC | Global permission catalogue (141 permissions), 12 default tenant roles, custom roles, 6 data scopes incl. SELECTED_BRANCHES, anti-escalation, last-owner protection, 7 platform admin roles | **13** RBAC tests |
-| Subscription engine | DB-driven plans, versioned prices, entitlements, overrides, add-ons; centralised enforcement (tenant status, subscription status, expiry, entitlement, employee/branch/user/storage limits, permissions); race-safe limits; lifecycle state machine + 15-min sweep; read-only mode preserving data; manual payment activation; full event history | **28** subscription tests |
-| Provisioning | One-transaction tenant creation: subdomain, settings, 12 roles, HQ branch, owner (password or invitation), trial subscription, audit | provisioning tests |
-| APIs | `/public/plans`, tenant auth, branches, departments, employees (scoped, paginated, searchable), roles/permissions/users/invitations, tenant audit log, my-subscription, Super Admin tenants/plans/prices/entitlements/subscriptions/audit | OpenAPI 3.1 at `/api/docs` |
-| Audit | Append-only audit log (DB-enforced) for every privileged tenant and platform action | tests |
-| Design system | `@hrms/shared-ui`: Tailwind v4 tokens, Button, Field/Input/Select/Textarea/Checkbox, Card, Badge, Stat, Skeleton, EmptyState, DataTable (sort, paging, loading, empty), Dialog/ConfirmDialog (focus trap), Toasts, UsageMeter, UpgradePrompt, SubscriptionBanner, AppShell (responsive), BrandProvider, NPR/date formatting, API-error mapper | built and visually checked at 1360 px and 390 px |
-| DevOps | Dockerfile (non-root, tini, healthcheck), Compose (postgres, redis, migrate, api×2, worker, nginx), Nginx TLS/HSTS/rate limits, `.env.example` files, GitHub Actions CI (tests, backup drill, audit, image build), backup + restore-verify scripts | compose validated; backup → restore → verify run successfully |
+| Product | Scope |
+|---|---|
+| **Marketing website** (`www.`) | 51 prerendered, SEO-ready pages and a sitemap: home, 20 feature pages, 12 industry pages, pricing with a live calculator and comparison table, about, contact, demo request, customers, FAQ, help, status, blog, changelog, security and legal pages (from the CMS). Signup with email verification creates a live workspace. Demo and contact requests go to the CRM. Newsletter signup. Honest status flags: features not built yet are marked "Coming soon". |
+| **Super Admin portal** (`admin.`) | Dashboard (MRR, signups, plan mix). Tenants: detail, suspend/reactivate, plan changes, limit overrides. Plans, prices and entitlements. Billing: invoices, payment approval, credit notes, coupons. Lead CRM with convert-to-tenant. Website CMS (FAQs, announcements, legal and blog pages). Support desk. Platform settings and staff roles. Audit log. |
+| **Company HRMS** (`<company>.` / `app.`) | Dashboard. Employees: lifecycle, history, CSV import/export, encrypted bank details, documents with expiry reminders, login invites. Organization (branches, departments, designations, shifts). Attendance: web clock-in with optional geofence, register, corrections, policy. Leave: Labour Act 2074 defaults, ledger balances, multi-level approval, holidays, calendar. Nepal payroll: BS months, versioned tax rules for FY 2082/83 and 2083/84, SSF/PF/CIT, female rebate, maker-checker approval, locked runs, payslip PDFs, bank transfer, TDS and SSF reports. Reports with Excel/CSV export. Announcements and notifications. Users, roles and data scopes. Subscription and billing (eSewa, Khalti, bank transfer). Support tickets. Settings and audit log. Installable as a mobile app (PWA). |
+| **Platform** | Multi-tenant PostgreSQL with forced row-level security and fail-closed tenant context. Argon2id passwords, rotating refresh tokens with reuse detection, RBAC with 151 permissions and 6 data scopes. Subscription states FULL / GRACE / READ_ONLY / BLOCKED enforced centrally. Background worker for the subscription lifecycle, renewal invoices, payment reconciliation, document expiry reminders and email. |
 
-**Test results:** `npm test` → **73 passed, 0 failed** (Postgres 16, Redis 7, ~8 s). `npm audit --omit=dev` → 0 vulnerabilities.
+## Verification
 
-## Known issues / limitations
+| Check | Result |
+|---|---|
+| Backend tests (`npm test`) | **157 passed, 0 failed**: auth 15, tenant isolation 18, RBAC 13, subscriptions 28, commercial/billing 39, HR 24, payroll 12, reports 11 |
+| Dependency audit (`npm audit --omit=dev`) | 0 vulnerabilities in backend and frontend |
+| Browser end-to-end (Playwright, Chrome) | Marketing signup → email verification → active workspace. Demo request → CRM lead. Every admin portal page. Company app: sign-in, clock-in, employees, salary, payroll calculate with tax breakdown, billing, reports and Excel export, every page; mobile layout at 390 px. No console errors. |
+| Production Nginx config | Rendered from the template and tested locally: host routing, apex→www, prerendered pages with shell fallback, `/api` proxy, CSP/HSTS headers, immutable asset caching, rate limits (verified 429). Correct HTTP status codes. |
+| Production configuration | The filled `.env.example` passes the API's refuse-to-start checks; the unfilled template is rejected. |
+| Backups | Backup → restore → verify drill tested (also runs in CI). The VPS kit adds encrypted nightly backups and a weekly restore drill. |
+| Container images | **Not built in the development sandbox** (Docker Hub is blocked there). CI builds both images on every push, and the first VPS deploy builds them on the server. |
 
-1. **Docker image not built in the dev sandbox** (no Docker daemon there). The Compose file validates and CI builds the image; do a first `docker compose up` on a real host.
-2. **MFA** is modelled (`mfa_secret_enc` columns) but not implemented. Planned for Phase 2 alongside email verification UI.
-3. **Email delivery** uses a `log` transport. The SMTP/API provider and DB-stored templates come with the notification engine.
-4. **Concurrent refresh from two tabs** of the same session counts as reuse and signs the user out. The frontend must serialise refreshes (single-flight), or we add a short grace window.
-5. **Plan change proration** is not applied yet. `changePlan` switches immediately; proration, invoices and downgrade-at-renewal billing arrive with Phase 2 billing.
-6. **Custom-domain verification flow** (DNS TXT check) is modelled (`verification_token`) but has no endpoint yet.
-7. Nginx config not syntax-checked locally (no nginx binary); it's checked on first container start.
+## Database
 
-## Next — Phase 2: Public website & commercial engine
+- 6 SQL migrations and 59 tables.
+- 39 tenant tables use forced row-level security.
+- Composite tenant foreign keys.
+- Append-only audit, history, leave-ledger and salary tables.
+- Approved payroll is locked by database triggers.
 
-- Marketing site (React + Router + TanStack Query) on `/public/*` endpoints; CMS tables and admin APIs
-- Pricing page and calculator from `/public/plans` plus a pricing-rules endpoint
-- Self-service registration → `provisionTenant`, with email verification
-- Billing: invoices, invoice items, tax config, proration, credit notes; payment abstraction with eSewa / Khalti / bank transfer adapters and **server-side callback verification**
-- Lead capture → CRM tables
+## Features marked "Coming soon" on the website (not built)
 
-Then Phase 3 (Super Admin UI + CRM + support), Phase 4 (core HRMS + ESS PWA), Phase 5 (payroll and Nepal compliance with versioned tax/contribution tables), Phase 6 (custom fields, workflow builder, AI), Phase 7 (hardening, load tests, monitoring, dedicated-DB router).
+Recruitment, onboarding/offboarding, performance management, expense management, asset management, training, workforce planning, HR helpdesk, employee engagement, AI HR assistant and custom workflows.
+
+The plan comparison table lists them as plan entitlements. Each one appears in the product only when it is built, and its website status changes at the same time.
+
+## Known limitations
+
+1. **Legal pages are drafts.** Terms, Privacy and Refund policy are seeded as drafts for review by Nepali counsel before publishing.
+2. **Statutory figures need yearly review.** Tax slabs, SSF rates and leave entitlements are stored as versioned data, not code. Check them against each Finance Act (every Shrawan) under Super Admin and payroll setup.
+3. **Live payments are untested against production gateways.** eSewa and Khalti are integrated and tested against the documented APIs with sandbox semantics. Make one small live transaction of each before announcing them. Launching with bank transfer only is supported.
+4. **No MFA yet.** The database columns exist, but the login flow does not use them.
+5. **Custom domains** (a company's own domain instead of a subdomain) are not offered. Workspaces use `<slug>.<domain>`.
+6. **Attendance is web/PWA clock-in only.** No biometric device integration.
+7. **Absence deduction is off by default.** Days with no attendance record are not docked from pay unless the company enables "Deduct absent days from pay" in its attendance policy.
+
+## Next phase (suggested order)
+
+1. Production deployment on the VPS (`documentation/deployment/vps-deployment.md`).
+2. MFA (TOTP) for Super Admin staff and company owners.
+3. Expense claims linked to payroll adjustments, then asset management (both on existing patterns).
+4. Recruitment and onboarding.
+5. Performance reviews.
