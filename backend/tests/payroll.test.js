@@ -99,6 +99,17 @@ describe('Payroll', () => {
       const it = detail.items[0];
       assert.equal(Number(it.ssfEmployee), Math.round(Number(it.lines.find((l) => l.code === 'BASIC').amount) * 0.11 * 100) / 100);
       assert.ok(it.taxDetail.bands);
+      // No attendance kept: days without a record are NOT docked unless the company opts in.
+      assert.equal(Number(it.attendance.unpaidDays), 0);
+      assert.equal(Number(it.lines.find((l) => l.code === 'BASIC').amount), 60000);
+      const owner = as('payrollco', (await login('payrollco', T.ownerEmail)).token);
+      assert.equal((await owner.put('/attendance/policy').send({ deductAbsences: true })).status, 200);
+      await maker.post(`/payroll/runs/${runId}/calculate`);
+      const docked = (await maker.get(`/payroll/runs/${runId}`)).body.data.items[0];
+      assert.ok(Number(docked.attendance.unpaidDays) > 0);
+      assert.ok(Number(docked.lines.find((l) => l.code === 'BASIC').amount) < 60000);
+      await owner.put('/attendance/policy').send({ deductAbsences: false });
+      await maker.post(`/payroll/runs/${runId}/calculate`);
     });
 
     it('maker cannot approve own payroll; checker approves; approved payroll is immutable', async () => {

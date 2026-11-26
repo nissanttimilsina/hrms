@@ -128,7 +128,8 @@ payrollRouter.post('/runs/:id/calculate', requirePermission('payroll:create'), v
     const rules = (await app.TaxRuleSet.findByPk(run.ruleSetId, { transaction: t })).rules;
     const components = await app.SalaryComponent.findAll({ transaction: t });
     const emps = await app.Employee.findAll({ where: { deletedAt: null, joinedOn: { [Op.lte]: run.periodEnd }, [Op.or]: [{ exitedOn: null }, { exitedOn: { [Op.gte]: run.periodStart } }] }, transaction: t });
-    const att = await rangeSummary(t, { employeeIds: emps.map((e) => e.id), from: run.periodStart, to: run.periodEnd, tz, policy: await getPolicy(t) });
+    const policy = await getPolicy(t);
+    const att = await rangeSummary(t, { employeeIds: emps.map((e) => e.id), from: run.periodStart, to: run.periodEnd, tz, policy });
     const fy = fiscalYearRange(run.fiscalYear);
     const priorRuns = await app.PayrollRun.findAll({ where: { fiscalYear: run.fiscalYear, status: { [Op.in]: ['APPROVED', 'PAID'] }, periodEnd: { [Op.lt]: run.periodStart } }, attributes: ['id'], transaction: t });
     const priorItems = priorRuns.length ? await app.PayrollItem.findAll({ where: { runId: priorRuns.map((r) => r.id) }, attributes: ['employeeId', 'tax', 'taxDetail'], transaction: t }) : [];
@@ -143,9 +144,9 @@ payrollRouter.post('/runs/:id/calculate', requirePermission('payroll:create'), v
       const salary = await app.EmployeeSalary.findOne({ where: { employeeId: e.id, effectiveFrom: { [Op.lte]: run.periodEnd } }, order: [['effectiveFrom', 'DESC']], transaction: t });
       if (!salary) { skipped.push({ employeeId: e.id, name: `${e.firstName} ${e.lastName}`, reason: 'No salary configured' }); continue; }
       const a = att.find((x) => x.employeeId === e.id);
-      // Days outside employment in this period are unpaid; plus unpaid leave and absences.
+      // Days outside employment are unpaid, plus unpaid leave; absences only when the company opts in.
       const outside = periodDays - a.calendarDays;
-      const unpaidDays = r2(outside + a.unpaidLeave + a.absent);
+      const unpaidDays = r2(outside + a.unpaidLeave + (policy.deductAbsences ? a.absent : 0));
       const mine = priorItems.filter((i) => i.employeeId === e.id);
       const ytd = { assessable: mine.reduce((n, i) => n + Number(i.taxDetail.assessableMonth ?? 0), 0), retirement: mine.reduce((n, i) => n + Number(i.taxDetail.retirementMonth ?? 0), 0), tax: mine.reduce((n, i) => n + Number(i.tax), 0) };
       const c = calculateItem({

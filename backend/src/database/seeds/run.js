@@ -75,6 +75,24 @@ async function backfillDefaultRoles(sys, added, transaction) {
   }
 }
 
+/** Give tenants created before a module existed the same defaults new tenants get (idempotent). */
+export async function backfillTenantDefaults({ sys }) {
+  const { DEFAULT_LEAVE_TYPES } = await import('../../modules/leave/leave.routes.js');
+  const { DEFAULT_COMPONENTS } = await import('../../modules/payroll/payroll.routes.js');
+  const tenants = await sys.Tenant.findAll({ attributes: ['id'] });
+  for (const { id: tenantId } of tenants) {
+    if (!(await sys.LeaveType.count({ where: { tenantId } }))) {
+      await sys.LeaveType.bulkCreate(DEFAULT_LEAVE_TYPES.map((lt) => ({ isPaid: true, allowHalfDay: true, allowNegative: false, encashable: false, carryForwardMax: 0, minNoticeDays: 0, approvalLevels: 1, maxConsecutiveDays: null, appliesToGender: null, isActive: true, ...lt, tenantId })));
+    }
+    if (!(await sys.Shift.count({ where: { tenantId } }))) {
+      await sys.Shift.create({ tenantId, name: 'General (10:00–17:00)', startTime: '10:00', endTime: '17:00', breakMinutes: 60, graceMinutes: 10, weeklyOffs: ['SAT'], isDefault: true });
+    }
+    if (!(await sys.SalaryComponent.count({ where: { tenantId } }))) {
+      await sys.SalaryComponent.bulkCreate(DEFAULT_COMPONENTS.map((c) => ({ ...c, tenantId, isActive: true })));
+    }
+  }
+}
+
 export async function seedCmsDefaults({ sys }) {
   await sys.CmsEntry.bulkCreate(CMS_DEFAULTS.map((e, i) => ({ status: 'PUBLISHED', sortOrder: i, data: {}, seo: {}, summary: null, body: null, ...e })), { ignoreDuplicates: true });
 }
@@ -94,7 +112,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   try {
     await seedReference(db);
     await seedCmsDefaults(db);
-    console.log('✓ reference data and default content seeded');
+    await backfillTenantDefaults(db);
+    console.log('✓ reference data, default content and tenant defaults seeded');
     const { SEED_SUPERADMIN_EMAIL: email, SEED_SUPERADMIN_PASSWORD: password } = process.env;
     if (email && password) {
       await seedSuperAdmin(db, { email, password });

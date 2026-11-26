@@ -9,7 +9,8 @@
   "exports": {
     ".": "./src/index.js",
     "./theme.css": "./src/theme.css",
-    "./api": "./src/api.js"
+    "./api": "./src/api.js",
+    "./kit": "./src/app-kit.jsx"
   },
   "files": [
     "dist",

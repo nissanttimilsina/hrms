@@ -210,7 +210,7 @@ attendanceRouter.put('/policy', requirePermission('attendance:configure'), valid
   body: z.object({
     workStart: z.string().regex(/^\d{2}:\d{2}$/), workEnd: z.string().regex(/^\d{2}:\d{2}$/), breakMinutes: z.number().int().min(0).max(600),
     graceMinutes: z.number().int().min(0).max(240), halfDayMinutes: z.number().int().min(0).max(720), overtimeAfterMinutes: z.number().int().min(0).max(600),
-    weeklyOffs: z.array(z.enum(['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'])).max(6), allowWeb: z.boolean(), requireLocation: z.boolean(),
+    weeklyOffs: z.array(z.enum(['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'])).max(6), allowWeb: z.boolean(), requireLocation: z.boolean(), deductAbsences: z.boolean(),
     geofence: z.object({ enabled: z.boolean(), lat: z.number().min(-90).max(90).nullable(), lng: z.number().min(-180).max(180).nullable(), radiusM: z.number().int().min(20).max(50_000) })
       .refine((g) => !g.enabled || (g.lat != null && g.lng != null), 'Set the workplace location to enable geofencing'),
     ipAllowlist: z.array(z.union([z.ipv4(), z.ipv6()])).max(50),

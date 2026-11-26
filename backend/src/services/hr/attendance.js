@@ -6,6 +6,8 @@ import { scopeWhere } from '../rbac.service.js';
 export const DEFAULT_POLICY = {
   workStart: '10:00', workEnd: '17:00', breakMinutes: 60, graceMinutes: 10, halfDayMinutes: 240, overtimeAfterMinutes: 30,
   weeklyOffs: ['SAT'], allowWeb: true, requireLocation: false,
+  // Off by default: a company that doesn't track attendance must not see days without a record docked from pay.
+  deductAbsences: false,
   geofence: { enabled: false, lat: null, lng: null, radiusM: 200 }, ipAllowlist: [],
 };
 

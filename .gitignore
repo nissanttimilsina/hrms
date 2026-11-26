@@ -9,3 +9,6 @@ coverage/
 infrastructure/nginx/certs/
 backups/
 frontend/*/dist-ssr/
+
+# Local uploads (dev STORAGE_DRIVER=local)
+backend/storage/
