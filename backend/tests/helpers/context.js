@@ -19,7 +19,7 @@ export async function resetDatabase() {
   await migrate(process.env.DATABASE_URL_OWNER, { log: () => {} });
   const c = new pg.Client({ connectionString: process.env.DATABASE_URL_OWNER });
   await c.connect();
-  const { rows } = await c.query(`SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename <> 'schema_migrations'`);
+  const { rows } = await c.query(`SELECT tablename FROM pg_tables WHERE schemaname='public' AND tablename NOT IN ('schema_migrations', 'tax_rule_sets')`);
   await c.query(`TRUNCATE ${rows.map((r) => `"${r.tablename}"`).join(', ')} RESTART IDENTITY CASCADE`);
   await c.end();
   await redis.flushdb();

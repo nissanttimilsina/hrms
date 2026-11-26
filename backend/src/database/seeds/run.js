@@ -7,7 +7,7 @@
  * No credentials are hard-coded.
  */
 import { fileURLToPath } from 'node:url';
-import { FEATURES, PLANS, PERMISSIONS, PLATFORM_PERMISSIONS, PLATFORM_ROLES, DEFAULT_ROLES } from './catalog.js';
+import { FEATURES, PLANS, PERMISSIONS, PLATFORM_PERMISSIONS, PLATFORM_ROLES, DEFAULT_ROLES, TAX_RULE_SETS } from './catalog.js';
 import { CMS_DEFAULTS } from './cms-content.js';
 
 export async function seedReference({ sys, systemDb }) {
@@ -22,6 +22,7 @@ export async function seedReference({ sys, systemDb }) {
     if (added.length) await backfillDefaultRoles(sys, added, transaction);
     await sys.PlatformPermission.bulkCreate(PLATFORM_PERMISSIONS.map((key) => ({ key })), o);
     await sys.PlatformRole.bulkCreate(PLATFORM_ROLES.map(({ key, name }) => ({ key, name, isSystem: true })), o);
+    await sys.TaxRuleSet.bulkCreate(TAX_RULE_SETS.map((r) => ({ country: 'NP', status: 'ACTIVE', ...r })), o);
 
     // Sequential: queries in one transaction share a single connection.
     const roles = await sys.PlatformRole.findAll({ transaction });

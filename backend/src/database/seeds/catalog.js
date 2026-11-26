@@ -197,3 +197,14 @@ export const PLATFORM_ROLES = [
   { key: 'support_admin', name: 'Support Admin', perms: ['tenants:view', 'support:view', 'support:manage', 'subscriptions:view'] },
   { key: 'technical_admin', name: 'Technical Admin', perms: ['tenants:view', 'system:manage', 'audit:view', 'support:view'] },
 ];
+
+// --------------------------------------------------------------------------- statutory payroll rules (Nepal)
+// Mirrors migration 006. Re-verify every fiscal year; newer years are added by Super Admin or a new release.
+const common = { sstWaivedForSsf: true, femaleRebatePercent: 10, retirementDeduction: { maxAmount: 500000, maxFraction: 0.3333 }, ssf: { employeePercent: 11, employerPercent: 20 }, insurance: { lifeMax: 40000, healthMax: 20000 }, overtimeMultiplier: 1.5 };
+const unified2083 = [{ upTo: 1000000, rate: 1, sst: true }, { upTo: 1500000, rate: 10 }, { upTo: 2500000, rate: 20 }, { upTo: 4000000, rate: 27 }, { upTo: null, rate: 29 }];
+export const TAX_RULE_SETS = [
+  { fiscalYear: '2082/83', effectiveFrom: '2025-07-17', effectiveTo: '2026-07-16', sourceNote: 'Finance Act 2082: separate single/married schedules, top rate 39%.', rules: { ...common, slabs: {
+    SINGLE: [{ upTo: 500000, rate: 1, sst: true }, { upTo: 700000, rate: 10 }, { upTo: 1000000, rate: 20 }, { upTo: 2000000, rate: 30 }, { upTo: 5000000, rate: 36 }, { upTo: null, rate: 39 }],
+    MARRIED: [{ upTo: 600000, rate: 1, sst: true }, { upTo: 800000, rate: 10 }, { upTo: 1100000, rate: 20 }, { upTo: 2000000, rate: 30 }, { upTo: 5000000, rate: 36 }, { upTo: null, rate: 39 }] } } },
+  { fiscalYear: '2083/84', effectiveFrom: '2026-07-17', effectiveTo: '2027-07-16', sourceNote: 'Finance Act 2083: unified schedule for individuals and couples, 1% band to Rs 10 lakh, top rate 29%.', rules: { ...common, slabs: { SINGLE: unified2083, MARRIED: unified2083 } } },
+];

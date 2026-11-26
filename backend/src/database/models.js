@@ -226,6 +226,24 @@ export function defineModels(sequelize) {
   }, createdOnly('announcements'));
   const Notification = sequelize.define('Notification', { id, tenantId, userId: U, type: S, title: S, body: T, link: S, readAt: D }, createdOnly('notifications'));
 
+  // ---------------------------------------------------------------- payroll (006)
+  const TaxRuleSet = sequelize.define('TaxRuleSet', { id, country: S, fiscalYear: S, effectiveFrom: DO, effectiveTo: DO, rules: J, sourceNote: T, status: S }, createdOnly('tax_rule_sets'));
+  const SalaryComponent = sequelize.define('SalaryComponent', { id, tenantId, code: S, name: S, kind: S, taxable: B, prorated: B, isActive: B, sortOrder: I }, createdOnly('salary_components'));
+  const EmployeeSalary = sequelize.define('EmployeeSalary', {
+    id, tenantId, employeeId: U, effectiveFrom: DO, basic: M, components: J, ssfEnrolled: B, pfPercent: DataTypes.DECIMAL(5, 2), citMonthly: M, taxProfile: J, reason: T, createdBy: U,
+  }, createdOnly('employee_salaries'));
+  const PayrollRun = sequelize.define('PayrollRun', {
+    id, tenantId, period: S, periodStart: DO, periodEnd: DO, fiscalYear: S, status: S, ruleSetId: U, totals: J, anomalies: I, createdBy: U,
+    calculatedAt: D, submittedBy: U, submittedAt: D, approvedBy: U, approvedAt: D, publishedAt: D, paidAt: D, paymentRef: S, notes: T,
+  }, opts('payroll_runs'));
+  const PayrollItem = sequelize.define('PayrollItem', {
+    id, tenantId, runId: U, employeeId: U, lines: J, attendance: J, taxDetail: J, snapshot: J, gross: M, deductions: M, tax: M, ssfEmployee: M, ssfEmployer: M, net: M, anomalies: J,
+  }, createdOnly('payroll_items'));
+  const PayrollAdjustment = sequelize.define('PayrollAdjustment', { id, tenantId, employeeId: U, period: S, kind: S, description: T, amount: M, taxable: B, createdBy: U }, createdOnly('payroll_adjustments'));
+  PayrollItem.belongsTo(Employee, { foreignKey: 'employeeId', as: 'employee' });
+  PayrollItem.belongsTo(PayrollRun, { foreignKey: 'runId', as: 'run' });
+  PayrollRun.hasMany(PayrollItem, { foreignKey: 'runId', as: 'items' });
+
   Employee.belongsTo(Designation, { foreignKey: 'designationId', as: 'designation' });
   Employee.belongsTo(Shift, { foreignKey: 'shiftId', as: 'shift' });
   AttendanceRecord.belongsTo(Employee, { foreignKey: 'employeeId', as: 'employee' });
@@ -267,6 +285,7 @@ export function defineModels(sequelize) {
   SupportTicket.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
 
   return {
+    TaxRuleSet, SalaryComponent, EmployeeSalary, PayrollRun, PayrollItem, PayrollAdjustment,
     Designation, Shift, EmployeeHistory, File, AttendanceRecord, AttendanceCorrection, Holiday, LeaveType, LeaveTransaction,
     LeaveRequest, LeaveApproval, Announcement, Notification,
     PlatformSetting, Lead, LeadActivity, NewsletterSubscriber, CmsEntry, Coupon, Invoice, InvoiceItem, Payment, SupportTicket, SupportMessage,
