@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push: { branches: [main] }
+  pull_request:
+
+concurrency: { group: ci-${{ github.ref }}, cancel-in-progress: true }
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env: { POSTGRES_PASSWORD: postgres }
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-retries 20
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-retries 20
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      DATABASE_URL_OWNER: postgresql://hrms_owner:owner_pw@localhost:5432/hrms_test
+      DATABASE_URL_APP: postgresql://hrms_app:app_pw@localhost:5432/hrms_test
+      DATABASE_URL_SYSTEM: postgresql://hrms_system:system_pw@localhost:5432/hrms_test
+      REDIS_URL: redis://localhost:6379/1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: backend/package-lock.json }
+      - name: Create database roles
+        run: HRMS_DB=hrms_test HRMS_OWNER_PASSWORD=owner_pw HRMS_APP_PASSWORD=app_pw HRMS_SYSTEM_PASSWORD=system_pw ./infrastructure/docker/postgres/00-roles.sh
+      - run: npm ci
+        working-directory: backend
+      - name: Migrations (twice — must be idempotent)
+        working-directory: backend
+        run: node src/database/migrate.js && node src/database/migrate.js
+      - name: Tests (unit, integration, API, tenant isolation, RBAC, subscriptions)
+        working-directory: backend
+        run: npm test
+      - name: Backup & restore drill
+        run: |
+          BACKUP_DATABASE_URL=$DATABASE_URL_OWNER BACKUP_DIR=/tmp/bk ./infrastructure/deployment/backup.sh
+          ADMIN_URL=postgresql://postgres:postgres@localhost:5432/postgres ./infrastructure/deployment/restore-verify.sh $(ls /tmp/bk/*.dump)
+      - name: Dependency audit
+        working-directory: backend
+        run: npm audit --omit=dev --audit-level=high
+
+  shared-ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm, cache-dependency-path: frontend/shared-ui/package-lock.json }
+      - run: npm ci && npm run build && npm run build:gallery
+        working-directory: frontend/shared-ui
+
+  image:
+    needs: [backend]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: false
+          tags: hrms-api:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

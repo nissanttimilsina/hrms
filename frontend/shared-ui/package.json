@@ -1,0 +1,37 @@
+{
+  "name": "@hrms/shared-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "HRMS design system: tokens, Tailwind theme and reusable React components shared by marketing, super-admin and company apps.",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "exports": {
+    ".": "./dist/index.js",
+    "./theme.css": "./src/theme.css"
+  },
+  "files": [
+    "dist",
+    "src/theme.css"
+  ],
+  "scripts": {
+    "dev": "vite --config vite.gallery.config.js",
+    "build": "vite build",
+    "build:gallery": "vite build --config vite.gallery.config.js"
+  },
+  "peerDependencies": {
+    "react": ">=18",
+    "react-dom": ">=18"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.5",
+    "@vitejs/plugin-react": "^4.7.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwindcss": "^4.3.5",
+    "vite": "^6.4.6"
+  }
+}

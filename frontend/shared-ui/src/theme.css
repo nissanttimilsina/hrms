@@ -1,0 +1,57 @@
+/*
+ * HRMS design tokens (Tailwind v4 theme).
+ * Every app imports this once:   @import "@hrms/shared-ui/theme.css";
+ * Direction: light neutral surfaces, one confident blue accent, restrained
+ * borders/shadows, strong type hierarchy. No yellow as a primary colour.
+ * Per-tenant branding overrides --color-brand-* at runtime (see BrandProvider).
+ */
+@import "tailwindcss";
+@source "./";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans Devanagari", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  /* Brand (overridable per tenant) */
+  --color-brand-50: #eff5ff;
+  --color-brand-100: #dbe8fe;
+  --color-brand-200: #bfd5fe;
+  --color-brand-500: #3a6ff2;
+  --color-brand-600: #2453d6;
+  --color-brand-700: #1d43ad;
+  --color-brand-900: #172b63;
+
+  /* Neutrals: cool slate */
+  --color-ink-900: #0f1729;   /* headings */
+  --color-ink-700: #334155;   /* body */
+  --color-ink-500: #64748b;   /* secondary text */
+  --color-ink-400: #94a3b8;   /* placeholders, icons */
+  --color-line: #e5e9f0;      /* borders */
+  --color-line-strong: #cfd6e1;
+  --color-surface: #ffffff;
+  --color-canvas: #f7f8fa;    /* app background */
+  --color-subtle: #f1f4f8;    /* table headers, hover */
+
+  /* Status */
+  --color-success-50: #ecfdf3;  --color-success-600: #0f8a4f;  --color-success-700: #0b6b3d;
+  --color-warning-50: #fff6ed;  --color-warning-600: #c2560c;  --color-warning-700: #9a420a;
+  --color-danger-50:  #fef1f1;  --color-danger-600:  #d1293d;  --color-danger-700:  #a91f30;
+  --color-info-50:    #eef6ff;  --color-info-600:    #1d6fd1;
+
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --shadow-card: 0 1px 2px rgb(15 23 41 / 0.04), 0 1px 1px rgb(15 23 41 / 0.03);
+  --shadow-pop: 0 12px 32px -8px rgb(15 23 41 / 0.18), 0 2px 6px rgb(15 23 41 / 0.06);
+
+  --animate-shimmer: shimmer 1.4s ease-in-out infinite;
+  @keyframes shimmer { 0%, 100% { opacity: 1 } 50% { opacity: .55 } }
+}
+
+@layer base {
+  html { color: var(--color-ink-700); background: var(--color-canvas); -webkit-font-smoothing: antialiased; }
+  h1, h2, h3, h4 { color: var(--color-ink-900); letter-spacing: -0.01em; }
+  :focus-visible { outline: 2px solid var(--color-brand-500); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+}

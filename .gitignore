@@ -1,0 +1,10 @@
+node_modules/
+dist/
+dist-gallery/
+.env
+.env.*
+!.env.example
+*.log
+coverage/
+infrastructure/nginx/certs/
+backups/
