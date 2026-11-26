@@ -115,7 +115,16 @@ The script does the following:
 
 The first build takes 5–10 minutes.
 
-## 6. Install the scheduled jobs
+## 6. Biometric devices (optional)
+
+Terminals use the `*.<domain>` wildcard, so no extra DNS is needed. In the company app go to **Devices → Add device**, enter the serial number, then on the device:
+
+- **Comm. → Cloud Server Setting (ADMS)**: server `devices.<domain>`, port **443** with HTTPS on, or port **80** if the device has no HTTPS option (only `/iclock/` is served over plain HTTP).
+- Enrol employees on the device with the same ID entered as their **Biometric ID** in HRMS. Unmatched IDs appear under **Devices → Unmapped users** and can be linked later; their earlier punches are applied then.
+
+The device appears **Online** within a minute. Check **Sync log** for its first upload.
+
+## 7. Install the scheduled jobs
 
 ```bash
 cp /opt/hrms/infrastructure/vps/crontab /etc/cron.d/hrms
@@ -138,7 +147,7 @@ Run the first backup and drill by hand now:
 /opt/hrms/infrastructure/vps/backup.sh && /opt/hrms/infrastructure/vps/restore-drill.sh
 ```
 
-## 7. Go-live checklist
+## 8. Go-live checklist
 
 - [ ] `https://www.<domain>` loads; the bare domain redirects to www; http redirects to https.
 - [ ] Sign in at `https://admin.<domain>` with the seeded Super Admin, then change its password.
@@ -148,6 +157,8 @@ Run the first backup and drill by hand now:
 - [ ] On the marketing site, sign up a test company with a real inbox: verification email → workspace at `<slug>.<domain>` → add an employee → clock in.
 - [ ] Billing: pay a test invoice with bank transfer, then approve it under Super Admin → Billing. If eSewa or Khalti are enabled, make one small live payment and refund it.
 - [ ] Payroll: compare one payslip against a manual calculation. Check the tax slabs for the current fiscal year under Payroll setup against the Finance Act. Statutory rates change every Shrawan.
+- [ ] If you sell biometric integration: connect one real ZKTeco terminal and confirm punches appear in Attendance.
+- [ ] Super Admin → Requests: send a test plan request from a company and approve it.
 - [ ] Confirm the backup and restore drill ran: `tail /var/log/hrms-backup.log`.
 - [ ] Optional: switch the Cloudflare records to proxied (orange cloud) with SSL mode **Full (strict)**.
 

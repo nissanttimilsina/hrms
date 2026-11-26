@@ -108,6 +108,9 @@ export function PlanCardsSkeleton() {
 }
 
 /** Feature-by-plan comparison built from the live catalogue. */
+/** Plan entitlements that are built and usable today; everything else is shown as "Coming soon". */
+const SHIPPED = new Set(['employees', 'organization', 'ess', 'documents', 'reports', 'attendance', 'leave', 'payroll', 'shifts', 'biometric', 'reports_advanced', 'document_expiry_alerts', 'multi_branch']);
+
 export function ComparisonTable({ plans }) {
   const all = useMemo(() => {
     const seen = new Map();
@@ -129,7 +132,7 @@ export function ComparisonTable({ plans }) {
           ))}
           {all.map((f) => (
             <tr key={f.key}>
-              <th scope="row" className="px-4 py-2.5 text-left font-normal text-ink-700">{f.name}</th>
+              <th scope="row" className="px-4 py-2.5 text-left font-normal text-ink-700">{f.name}{!SHIPPED.has(f.key) && <span className="ml-2 rounded-full bg-subtle px-2 py-0.5 text-[11px] font-medium text-ink-500">Coming soon</span>}</th>
               {plans.map((p) => <td key={p.code} className="px-4 py-2.5 text-center">{has(p, f.key) ? <Icon name="Check" className="mx-auto size-4 text-success-600" /> : <span className="text-ink-400" aria-label="Not included">—</span>}</td>)}
             </tr>
           ))}

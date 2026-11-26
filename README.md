@@ -12,11 +12,11 @@ hrms-platform/
 │   │   ├── database/        migrations/*.sql (source of truth), models, migrate runner, seeds
 │   │   ├── middleware/      tenant resolution, auth, subscription guard, RBAC, errors, rate limits
 │   │   ├── modules/         public · auth · admin · billing · support · organization · employees ·
-│   │   │                    attendance · leave · payroll · reports · workspace
+│   │   │                    attendance · devices (biometric /iclock) · leave · payroll · reports · workspace
 │   │   ├── services/        auth · rbac · subscription · billing · payments · email · storage · hr/*
 │   │   ├── jobs/            queues + worker (lifecycle, renewals, reconciliation, reminders, email)
 │   │   └── routes/          /api/v1 route map
-│   └── tests/               node:test + supertest (157 tests)
+│   └── tests/               node:test + supertest (195 tests)
 ├── frontend/                npm workspaces
 │   ├── shared-ui/           design system + API client + app kit
 │   ├── marketing/           public website (prerendered at build time)

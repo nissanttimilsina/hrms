@@ -53,16 +53,16 @@ const ENTERPRISE = FEATURES.filter((f) => !f[3]).map((f) => f[0]);
 export const PLANS = [
   { code: 'BASIC', name: 'Basic', sortOrder: 1, maxEmployees: 20, maxBranches: 1, maxStorageMb: 2048,
     monthly: 1499, annual: 14990, features: BASIC,
-    highlights: ['Up to 20 employees', '1 branch', 'Attendance & leave', 'Employee self-service', 'Basic reports'] },
+    highlights: ['Up to 20 employees', '1 branch', 'Web & mobile attendance', 'Leave management', 'Employee self-service', 'On-screen reports'] },
   { code: 'PROFESSIONAL', name: 'Professional', sortOrder: 2, maxEmployees: 50, maxBranches: 2, maxStorageMb: 10240,
     monthly: 2999, annual: 29990, features: PROFESSIONAL,
-    highlights: ['Up to 50 employees', '2 branches', 'Payroll', 'Shift scheduling', 'Recruitment', 'Custom approval workflows'] },
+    highlights: ['Up to 50 employees', '2 branches', 'Nepal payroll (tax, SSF, PF, CIT)', 'Biometric devices', 'Shift schedules', 'PDF/Excel export & document alerts'] },
   { code: 'BUSINESS', name: 'Business', sortOrder: 3, maxEmployees: 150, maxBranches: 5, maxStorageMb: 51200,
     monthly: 5999, annual: 59990, features: BUSINESS,
-    highlights: ['Up to 150 employees', '5 branches', 'Advanced payroll', 'KPI & appraisal', 'Advanced analytics', 'API integrations'] },
+    highlights: ['Up to 150 employees', '5 branches', '50 GB document storage', 'Everything in Professional', 'Upcoming modules included as they launch'] },
   { code: 'ENTERPRISE', name: 'Enterprise', sortOrder: 4, maxEmployees: null, maxBranches: null, maxStorageMb: null,
     monthly: null, annual: null, features: ENTERPRISE, isCustom: true, contactSales: true, trialDays: 0,
-    highlights: ['150+ employees', 'Custom capacity', 'Dedicated deployment option', 'Custom integrations', 'Dedicated account manager'] },
+    highlights: ['150+ employees', 'Negotiated limits and price', 'Features enabled to your needs', 'Dedicated deployment on request', 'Dedicated onboarding'] },
 ];
 
 // --------------------------------------------------------------------------- tenant permissions
