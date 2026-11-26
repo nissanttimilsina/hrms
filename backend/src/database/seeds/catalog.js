@@ -91,9 +91,11 @@ export const RESOURCES = {
   reports: { module: 'reports', actions: ['view', 'export', 'configure'] },
   workflows: { module: 'workflows', actions: ['view', 'create', 'edit', 'delete', 'configure'] },
   support: { module: 'support', actions: ['view', 'create'] },
+  holidays: { module: 'leave', actions: ['view', 'create', 'edit', 'delete'] },
+  announcements: { module: 'ess', actions: ['view', 'create', 'edit', 'delete'] },
 };
 // Permissions that are not about records, so data scope does not apply.
-const UNSCOPED = new Set(['users', 'roles', 'settings', 'subscription', 'audit', 'workflows', 'support']);
+const UNSCOPED = new Set(['users', 'roles', 'settings', 'subscription', 'audit', 'workflows', 'support', 'holidays', 'announcements']);
 
 export const PERMISSIONS = Object.entries(RESOURCES).flatMap(([resource, { module, actions }]) =>
   actions.map((action) => ({
@@ -114,23 +116,26 @@ export const DEFAULT_ROLES = [
   { key: 'company_admin', name: 'Company Administrator', grants: every('COMPANY') },
   { key: 'hr_manager', name: 'HR Manager', grants: [
     ...r(['branches', 'departments', 'employees', 'documents', 'attendance', 'leave', 'shifts', 'recruitment',
-      'performance', 'training', 'assets', 'reports'], '*', 'COMPANY'),
+      'performance', 'training', 'assets', 'reports', 'holidays', 'announcements'], '*', 'COMPANY'),
     ...r(['users', 'roles'], ['view'], 'COMPANY'),
     ...r(['support'], ['view', 'create'], 'COMPANY'),
   ] },
   { key: 'hr_officer', name: 'HR Officer', grants: [
+    ...r(['holidays', 'announcements'], ['view'], 'COMPANY'),
     ...r(['employees', 'documents'], ['view', 'create', 'edit', 'import', 'export'], 'COMPANY'),
     ...r(['attendance', 'leave'], ['view', 'create', 'edit'], 'COMPANY'),
     ...r(['recruitment'], ['view', 'create', 'edit'], 'COMPANY'),
     ...r(['branches', 'departments'], ['view'], 'COMPANY'),
   ] },
   { key: 'payroll_manager', name: 'Payroll Manager', grants: [
+    ...r(['holidays', 'announcements'], ['view'], 'COMPANY'),
     ...r(['payroll'], '*', 'COMPANY'),
     ...r(['employees', 'attendance', 'leave', 'branches', 'departments'], ['view'], 'COMPANY'),
     ...r(['expenses'], ['view', 'approve', 'reject'], 'COMPANY'),
     ...r(['reports'], ['view', 'export'], 'COMPANY'),
   ] },
   { key: 'accountant', name: 'Accountant', grants: [
+    ...r(['holidays', 'announcements'], ['view'], 'COMPANY'),
     ...r(['payroll'], ['view', 'export'], 'COMPANY'),
     ...r(['expenses'], '*', 'COMPANY'),
     ...r(['reports'], ['view', 'export'], 'COMPANY'),
@@ -138,28 +143,33 @@ export const DEFAULT_ROLES = [
     ...r(['subscription'], ['view'], 'COMPANY'),
   ] },
   { key: 'department_manager', name: 'Department Manager', grants: [
+    ...r(['holidays', 'announcements'], ['view'], 'COMPANY'),
     ...r(['employees'], ['view'], 'DEPARTMENT'),
     ...r(['attendance', 'leave', 'expenses'], ['view', 'approve', 'reject'], 'DEPARTMENT'),
     ...r(['performance'], ['view', 'edit', 'approve'], 'DEPARTMENT'),
     ...r(['reports'], ['view'], 'DEPARTMENT'),
   ] },
   { key: 'branch_manager', name: 'Branch Manager', grants: [
+    ...r(['holidays', 'announcements'], ['view'], 'COMPANY'),
     ...r(['employees'], ['view'], 'BRANCH'),
     ...r(['attendance', 'leave', 'shifts', 'expenses'], ['view', 'approve', 'reject'], 'BRANCH'),
     ...r(['performance'], ['view', 'edit', 'approve'], 'BRANCH'),
     ...r(['reports'], ['view'], 'BRANCH'),
   ] },
   { key: 'team_leader', name: 'Team Leader', grants: [
+    ...r(['holidays', 'announcements'], ['view'], 'COMPANY'),
     ...r(['employees'], ['view'], 'DIRECT_REPORTS'),
     ...r(['attendance', 'leave'], ['view', 'approve', 'reject'], 'DIRECT_REPORTS'),
     ...r(['performance'], ['view', 'edit'], 'DIRECT_REPORTS'),
   ] },
   { key: 'recruitment_officer', name: 'Recruitment Officer', grants: [
+    ...r(['holidays', 'announcements'], ['view'], 'COMPANY'),
     ...r(['recruitment'], '*', 'COMPANY'),
     ...r(['employees'], ['create'], 'COMPANY'),
     ...r(['branches', 'departments'], ['view'], 'COMPANY'),
   ] },
   { key: 'employee', name: 'Employee', grants: [
+    ...r(['holidays', 'announcements'], ['view'], 'COMPANY'),
     ...r(['employees', 'documents', 'payroll'], ['view'], 'OWN'),
     ...r(['attendance', 'leave', 'expenses'], ['view', 'create'], 'OWN'),
     ...r(['branches', 'departments'], ['view'], 'COMPANY'),

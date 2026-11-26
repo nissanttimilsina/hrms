@@ -76,6 +76,9 @@ export function defineModels(sequelize) {
     id, tenantId, employeeCode: S, firstName: S, lastName: S, workEmail: S, phone: S,
     branchId: U, departmentId: U, managerId: U, status: S,
     joinedOn: DataTypes.DATEONLY, exitedOn: DataTypes.DATEONLY, deletedAt: D,
+    designationId: U, shiftId: U, employmentType: S, dateOfBirth: DataTypes.DATEONLY, gender: S, maritalStatus: S,
+    personalEmail: S, pan: S, ssfId: S, citizenshipNo: S, address: J, emergencyContacts: J, bank: J,
+    contractEndOn: DataTypes.DATEONLY, probationEndOn: DataTypes.DATEONLY, photoFileId: U, customFields: J,
   }, opts('employees'));
 
   // ---------------------------------------------------------------- users & RBAC
@@ -182,6 +185,55 @@ export function defineModels(sequelize) {
     id, tenantId, ticketId: U, authorType: S, authorId: U, body: T, isInternal: B,
   }, createdOnly('support_messages'));
 
+  // ---------------------------------------------------------------- HRMS core (005)
+  const DO = DataTypes.DATEONLY;
+  const N = DataTypes.DECIMAL(6, 1);
+  const Designation = sequelize.define('Designation', { id, tenantId, name: S, level: I, deletedAt: D }, opts('designations'));
+  const Shift = sequelize.define('Shift', {
+    id, tenantId, name: S, startTime: DataTypes.TIME, endTime: DataTypes.TIME, breakMinutes: I, graceMinutes: I,
+    weeklyOffs: DataTypes.ARRAY(DataTypes.TEXT), isDefault: B, deletedAt: D,
+  }, opts('shifts'));
+  const EmployeeHistory = sequelize.define('EmployeeHistory', {
+    id, tenantId, employeeId: U, type: S, effectiveOn: DO, fromValue: J, toValue: J, note: T, actorId: U,
+  }, createdOnly('employee_history'));
+  const File = sequelize.define('File', {
+    id, tenantId, ownerType: S, ownerId: U, storageKey: S, filename: S, mimeType: S, sizeBytes: DataTypes.BIGINT,
+    sha256: S, category: S, expiresOn: DO, uploadedBy: U, deletedAt: D,
+  }, createdOnly('files'));
+  const AttendanceRecord = sequelize.define('AttendanceRecord', {
+    id, tenantId, employeeId: U, workDate: DO, clockIn: D, clockOut: D, inMeta: J, outMeta: J, status: S,
+    lateMinutes: I, earlyMinutes: I, workedMinutes: I, overtimeMinutes: I, source: S, note: T,
+  }, opts('attendance_records'));
+  const AttendanceCorrection = sequelize.define('AttendanceCorrection', {
+    id, tenantId, employeeId: U, workDate: DO, clockIn: D, clockOut: D, reason: T, status: S, requestedBy: U,
+    reviewedBy: U, reviewedAt: D, reviewNote: T,
+  }, createdOnly('attendance_corrections'));
+  const Holiday = sequelize.define('Holiday', { id, tenantId, date: DO, name: S, isOptional: B, branchIds: DataTypes.ARRAY(DataTypes.UUID) }, createdOnly('holidays'));
+  const LeaveType = sequelize.define('LeaveType', {
+    id, tenantId, code: S, name: S, isPaid: B, annualQuota: N, accrual: S, carryForwardMax: N, encashable: B,
+    allowHalfDay: B, allowNegative: B, maxConsecutiveDays: I, minNoticeDays: I, approvalLevels: I, appliesToGender: S, isActive: B,
+  }, opts('leave_types'));
+  const LeaveTransaction = sequelize.define('LeaveTransaction', {
+    id, tenantId, employeeId: U, leaveTypeId: U, leaveYear: S, kind: S, days: N, requestId: U, note: T, actorId: U,
+  }, createdOnly('leave_transactions'));
+  const LeaveRequest = sequelize.define('LeaveRequest', {
+    id, tenantId, employeeId: U, leaveTypeId: U, startDate: DO, endDate: DO, halfDay: S, days: N, leaveYear: S, reason: T,
+    status: S, currentLevel: I, requiredLevels: I, requestedBy: U, decidedAt: D,
+  }, opts('leave_requests'));
+  const LeaveApproval = sequelize.define('LeaveApproval', { id, tenantId, requestId: U, level: I, decision: S, approverId: U, note: T }, createdOnly('leave_approvals'));
+  const Announcement = sequelize.define('Announcement', {
+    id, tenantId, title: S, body: T, branchIds: DataTypes.ARRAY(DataTypes.UUID), pinned: B, publishedAt: D, expiresAt: D, authorId: U,
+  }, createdOnly('announcements'));
+  const Notification = sequelize.define('Notification', { id, tenantId, userId: U, type: S, title: S, body: T, link: S, readAt: D }, createdOnly('notifications'));
+
+  Employee.belongsTo(Designation, { foreignKey: 'designationId', as: 'designation' });
+  Employee.belongsTo(Shift, { foreignKey: 'shiftId', as: 'shift' });
+  AttendanceRecord.belongsTo(Employee, { foreignKey: 'employeeId', as: 'employee' });
+  AttendanceCorrection.belongsTo(Employee, { foreignKey: 'employeeId', as: 'employee' });
+  LeaveRequest.belongsTo(Employee, { foreignKey: 'employeeId', as: 'employee' });
+  LeaveRequest.belongsTo(LeaveType, { foreignKey: 'leaveTypeId', as: 'leaveType' });
+  LeaveRequest.hasMany(LeaveApproval, { foreignKey: 'requestId', as: 'approvals' });
+
   // ---------------------------------------------------------------- associations
   PlatformUser.belongsToMany(PlatformRole, { through: PlatformUserRole, foreignKey: 'userId', otherKey: 'roleId', as: 'roles' });
   PlatformRole.belongsToMany(PlatformPermission, { through: PlatformRolePermission, foreignKey: 'roleId', otherKey: 'permissionId', as: 'permissions' });
@@ -215,6 +267,8 @@ export function defineModels(sequelize) {
   SupportTicket.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
 
   return {
+    Designation, Shift, EmployeeHistory, File, AttendanceRecord, AttendanceCorrection, Holiday, LeaveType, LeaveTransaction,
+    LeaveRequest, LeaveApproval, Announcement, Notification,
     PlatformSetting, Lead, LeadActivity, NewsletterSubscriber, CmsEntry, Coupon, Invoice, InvoiceItem, Payment, SupportTicket, SupportMessage,
     PlatformUser, PlatformRole, PlatformPermission, PlatformRolePermission, PlatformUserRole,
     AuthSession, AuthActionToken, Tenant, TenantDomain, TenantSetting, Branch, Department, Employee,

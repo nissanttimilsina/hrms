@@ -64,6 +64,20 @@ const schema = z.object({
   ESEWA_STATUS_URL: z.string().url().default('https://rc.esewa.com.np/api/epay/transaction/status/'),
   KHALTI_SECRET_KEY: z.string().optional(),
   KHALTI_BASE_URL: z.string().url().default('https://dev.khalti.com/api/v2'),
+
+  // Field-level encryption for sensitive data (bank account numbers). 32 random bytes, base64.
+  DATA_ENCRYPTION_KEY: z.string().default('ZGV2LW9ubHktZGF0YS1rZXktY2hhbmdlLW1lLTAwMzI='),
+
+  // File storage: 'local' (disk volume) or 's3' (any S3-compatible store: AWS, MinIO, Wasabi, DO Spaces)
+  STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
+  STORAGE_DIR: z.string().default('./storage'),
+  S3_BUCKET: z.string().optional(),
+  S3_REGION: z.string().default('us-east-1'),
+  S3_ENDPOINT: z.string().optional(),
+  S3_ACCESS_KEY_ID: z.string().optional(),
+  S3_SECRET_ACCESS_KEY: z.string().optional(),
+  S3_FORCE_PATH_STYLE: bool(true),
+  MAX_UPLOAD_MB: z.coerce.number().int().positive().default(10),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -80,6 +94,8 @@ if (parsed.data.NODE_ENV === 'production') {
   if (enabled.includes('KHALTI') && (!parsed.data.KHALTI_SECRET_KEY || parsed.data.KHALTI_BASE_URL.includes('dev.khalti'))) problems.push('Khalti is enabled without live credentials');
   if (!parsed.data.COOKIE_SECURE) problems.push('COOKIE_SECURE must be true');
   if (parsed.data.EMAIL_TRANSPORT !== 'smtp') problems.push('EMAIL_TRANSPORT must be smtp');
+  if (parsed.data.DATA_ENCRYPTION_KEY === 'ZGV2LW9ubHktZGF0YS1rZXktY2hhbmdlLW1lLTAwMzI=' || Buffer.from(parsed.data.DATA_ENCRYPTION_KEY, 'base64').length !== 32) problems.push('DATA_ENCRYPTION_KEY must be a unique 32-byte base64 key');
+  if (parsed.data.JWT_ACCESS_SECRET.includes('change') || parsed.data.JWT_ACCESS_SECRET.length < 48) problems.push('JWT_ACCESS_SECRET must be a long random value');
   if (problems.length) {
     // eslint-disable-next-line no-console
     console.error(`Refusing to start in production:\n - ${problems.join('\n - ')}`);

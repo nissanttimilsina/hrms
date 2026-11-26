@@ -7,6 +7,7 @@ import { assertWithinLimit } from '../../services/subscription.service.js';
 import { audit, tenantActor } from '../../services/audit.service.js';
 import { asyncHandler, ok, created, listQuery, paginate, pageMeta, searchWhere } from '../../utils/http.js';
 import { NotFound, Conflict } from '../../utils/errors.js';
+import { Op } from 'sequelize';
 
 export const organizationRouter = Router();
 const idParam = { params: z.object({ id: z.string().uuid() }) };
@@ -115,3 +116,59 @@ organizationRouter.delete('/departments/:id', requirePermission('departments:del
     });
     return ok(res, { deleted: true });
   }));
+
+// =========================================================================== designations
+const desigBody = z.object({ name: z.string().trim().min(2).max(120), level: z.number().int().min(0).max(100).nullish() }).strict();
+organizationRouter.get('/designations', requirePermission('departments:view'), asyncHandler(async (req, res) =>
+  ok(res, await req.tx((t) => app.Designation.findAll({ where: { deletedAt: null }, order: [['level', 'ASC NULLS LAST'], ['name', 'ASC']], transaction: t })))));
+organizationRouter.post('/designations', requirePermission('departments:create'), validate({ body: desigBody }), asyncHandler(async (req, res) =>
+  created(res, await req.tx((t) => app.Designation.create({ ...req.body, tenantId: req.auth.tenantId }, { transaction: t })))));
+organizationRouter.patch('/designations/:id', requirePermission('departments:edit'), validate({ ...idParam, body: desigBody.partial() }), asyncHandler(async (req, res) => {
+  const d = await req.tx(async (t) => { const r = await app.Designation.findByPk(req.params.id, { transaction: t }); if (!r) throw NotFound('Designation'); return r.update(req.body, { transaction: t }); });
+  return ok(res, d);
+}));
+organizationRouter.delete('/designations/:id', requirePermission('departments:delete'), validate(idParam), asyncHandler(async (req, res) => {
+  await req.tx(async (t) => {
+    const r = await app.Designation.findByPk(req.params.id, { transaction: t });
+    if (!r) throw NotFound('Designation');
+    if (await app.Employee.count({ where: { designationId: r.id, deletedAt: null }, transaction: t })) throw Conflict('Designation is in use', 'IN_USE');
+    await r.update({ deletedAt: new Date() }, { transaction: t });
+  });
+  return ok(res, { deleted: true });
+}));
+
+// =========================================================================== shifts
+const shiftBody = z.object({
+  name: z.string().trim().min(2).max(80), startTime: z.string().regex(/^\d{2}:\d{2}$/), endTime: z.string().regex(/^\d{2}:\d{2}$/),
+  breakMinutes: z.number().int().min(0).max(600).default(60), graceMinutes: z.number().int().min(0).max(240).default(10),
+  weeklyOffs: z.array(z.enum(['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'])).max(6).default(['SAT']), isDefault: z.boolean().default(false),
+}).strict();
+organizationRouter.get('/shifts', requirePermission('shifts:view'), asyncHandler(async (req, res) =>
+  ok(res, await req.tx((t) => app.Shift.findAll({ where: { deletedAt: null }, order: [['name', 'ASC']], transaction: t })))));
+organizationRouter.post('/shifts', requirePermission('shifts:create'), validate({ body: shiftBody }), asyncHandler(async (req, res) => {
+  const s = await req.tx(async (t) => {
+    if (req.body.isDefault) await app.Shift.update({ isDefault: false }, { where: { isDefault: true }, transaction: t });
+    const r = await app.Shift.create({ ...req.body, tenantId: req.auth.tenantId }, { transaction: t });
+    await audit({ transaction: t, tenantId: req.auth.tenantId, actor: tenantActor(req), action: 'shift.create', entityType: 'shift', entityId: r.id, after: req.body, req });
+    return r;
+  });
+  return created(res, s);
+}));
+organizationRouter.patch('/shifts/:id', requirePermission('shifts:edit'), validate({ ...idParam, body: shiftBody.partial() }), asyncHandler(async (req, res) => {
+  const s = await req.tx(async (t) => {
+    const r = await app.Shift.findByPk(req.params.id, { transaction: t });
+    if (!r) throw NotFound('Shift');
+    if (req.body.isDefault) await app.Shift.update({ isDefault: false }, { where: { isDefault: true, id: { [Op.ne]: r.id } }, transaction: t });
+    return r.update(req.body, { transaction: t });
+  });
+  return ok(res, s);
+}));
+organizationRouter.post('/shifts/:id/assign', requirePermission('shifts:manage'), validate({ ...idParam, body: z.object({ employeeIds: z.array(z.string().uuid()).min(1).max(1000) }).strict() }), asyncHandler(async (req, res) => {
+  const n = await req.tx(async (t) => {
+    if (!(await app.Shift.count({ where: { id: req.params.id, deletedAt: null }, transaction: t }))) throw NotFound('Shift');
+    const [count] = await app.Employee.update({ shiftId: req.params.id }, { where: { id: req.body.employeeIds }, transaction: t });
+    await audit({ transaction: t, tenantId: req.auth.tenantId, actor: tenantActor(req), action: 'shift.assign', entityType: 'shift', entityId: req.params.id, after: { employees: req.body.employeeIds.length }, req });
+    return count;
+  });
+  return ok(res, { assigned: n });
+}));

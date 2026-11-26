@@ -10,6 +10,9 @@ import { commercialAdminRouter } from '../modules/admin/commercial.routes.js';
 import { publicRouter } from '../modules/public/public.routes.js';
 import { tenantBillingRouter, paymentReturnRouter } from '../modules/billing/billing.routes.js';
 import { tenantSupportRouter } from '../modules/support/support.routes.js';
+import { attendanceRouter } from '../modules/attendance/attendance.routes.js';
+import { leaveRouter } from '../modules/leave/leave.routes.js';
+import { workspaceRouter } from '../modules/workspace/workspace.routes.js';
 
 /**
  * /api/v1 route map.
@@ -42,6 +45,9 @@ export function apiRouter() {
   tenant.use('/employees', employeesRouter);
   tenant.use('/', accessRouter); // /roles, /permissions, /users, /audit-logs
   tenant.use('/subscription', tenantSubscriptionRouter);
+  tenant.use('/attendance', attendanceRouter);
+  tenant.use('/leave', leaveRouter);
+  tenant.use('/', workspaceRouter); // /dashboard, /announcements, /notifications, /settings
   r.use(tenant);
 
   return r;

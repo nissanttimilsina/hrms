@@ -63,6 +63,9 @@ export async function provisionTenant({
     }
 
     await sys.Branch.create({ tenantId, code: 'HQ', name: 'Head Office', isHeadOffice: true }, { transaction });
+    await sys.Shift.create({ tenantId, name: 'General (10:00–17:00)', startTime: '10:00', endTime: '17:00', breakMinutes: 60, graceMinutes: 10, weeklyOffs: ['SAT'], isDefault: true }, { transaction });
+    const { DEFAULT_LEAVE_TYPES } = await import('../modules/leave/leave.routes.js');
+    await sys.LeaveType.bulkCreate(DEFAULT_LEAVE_TYPES.map((lt) => ({ isPaid: true, allowHalfDay: true, allowNegative: false, encashable: false, carryForwardMax: 0, minNoticeDays: 0, approvalLevels: 1, maxConsecutiveDays: null, appliesToGender: null, isActive: true, ...lt, tenantId })), { transaction });
 
     const user = await sys.User.create({
       tenantId, email: owner.email, fullName: owner.fullName,
