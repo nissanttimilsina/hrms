@@ -18,8 +18,8 @@ export function Reports() {
   const [f, setF] = useState({ from: addDays(todayKtm(), -29), to: todayKtm() });
   const def = available.find((r) => r.key === key);
   const params = new URLSearchParams(Object.entries({
-    ...(def?.filters.includes('range') ? { from: f.from, to: f.to } : { fiscalYear: f.fiscalYear }),
-    branchId: f.branchId, departmentId: f.departmentId,
+    ...(def?.filters.includes('range') ? { from: f.from, to: f.to } : def?.filters.includes('fiscalYear') ? { fiscalYear: f.fiscalYear } : {}),
+    ...(def?.filters.includes('branch') && { branchId: f.branchId }), ...(def?.filters.includes('department') && { departmentId: f.departmentId }),
   }).filter(([, v]) => v)).toString();
   const { data: r, isPending, error } = useQuery({ queryKey: ['report', key, params], queryFn: () => api.get(`/reports/${key}?${params}`), enabled: !!def });
   const fmt = (v) => (r?.money && typeof v === 'number' ? npr(v) : v);
@@ -32,7 +32,7 @@ export function Reports() {
   return (
     <>
       <PageHeader title="Reports" description="Figures cover only the people you're allowed to see."
-        actions={a.can('reports:export') && r && (catalog?.canExport ? <><Button variant="secondary" onClick={() => exportAs('csv')}>Export CSV</Button><Button variant="secondary" onClick={() => exportAs('xlsx')}>Export Excel</Button></> : <span className="text-sm text-ink-500">Excel/CSV export is included from the Professional plan.</span>)} />
+        actions={a.can('reports:export') && r && (catalog?.canExport ? <><Button variant="secondary" onClick={() => exportAs('pdf')}>PDF</Button><Button variant="secondary" onClick={() => exportAs('xlsx')}>Excel</Button><Button variant="secondary" onClick={() => exportAs('csv')}>CSV</Button></> : <span className="text-sm text-ink-500">PDF, Excel and CSV export are included from the Professional plan.</span>)} />
       <div className="mb-4 flex flex-wrap gap-1 border-b border-line">
         {available.map((x) => <button key={x.key} type="button" onClick={() => setKey(x.key)} className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${key === x.key ? 'border-brand-600 text-brand-700' : 'border-transparent text-ink-500'}`}>{x.name}</button>)}
       </div>
@@ -42,11 +42,11 @@ export function Reports() {
             <Field label="From"><Input type="date" value={f.from} max={f.to} onChange={(e) => setF({ ...f, from: e.target.value })} /></Field>
             <Field label="To"><Input type="date" value={f.to} min={f.from} onChange={(e) => setF({ ...f, to: e.target.value })} /></Field>
           </>
-        ) : fyOptions.length > 0 && (
+        ) : def?.filters.includes('fiscalYear') && fyOptions.length > 0 && (
           <Field label="Fiscal year"><Select value={f.fiscalYear ?? fy} onChange={(e) => setF({ ...f, fiscalYear: e.target.value })} options={fyOptions.map((x) => ({ value: x, label: `FY ${x}` }))} /></Field>
         )}
-        <Field label="Branch"><Select value={f.branchId ?? ''} placeholder="All branches" options={org.branches} onChange={(e) => setF({ ...f, branchId: e.target.value || undefined })} /></Field>
-        <Field label="Department"><Select value={f.departmentId ?? ''} placeholder="All departments" options={org.departments} onChange={(e) => setF({ ...f, departmentId: e.target.value || undefined })} /></Field>
+        {def?.filters.includes('branch') && <Field label="Branch"><Select value={f.branchId ?? ''} placeholder="All branches" options={org.branches} onChange={(e) => setF({ ...f, branchId: e.target.value || undefined })} /></Field>}
+        {def?.filters.includes('department') && <Field label="Department"><Select value={f.departmentId ?? ''} placeholder="All departments" options={org.departments} onChange={(e) => setF({ ...f, departmentId: e.target.value || undefined })} /></Field>}
       </div>
       {error ? <EmptyState title="Couldn't load this report" description={error.message} /> : isPending || !r ? <Skeleton className="h-96" /> : (
         <>

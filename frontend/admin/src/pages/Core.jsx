@@ -112,7 +112,7 @@ export function Tenants() {
   const add = useAction((b) => api.post('/tenants', b), { success: (r) => `Company created: ${r.hostname}`, invalidate: ['/tenants'], onDone: () => setCreate(false) });
   return (
     <>
-      <PageHeader title="Companies" description="All tenant workspaces" actions={can('tenants:manage') && <Button onClick={() => setCreate(true)}>New company</Button>} />
+      <PageHeader title="Companies" description="All tenant workspaces" actions={<><Button variant="secondary" onClick={() => api.download('/reports/companies?format=csv', 'companies.csv')}>Export CSV</Button>{can('tenants:manage') && <Button onClick={() => setCreate(true)}>New company</Button>}</>} />
       <Filters list={list} selects={[{ name: 'status', label: 'Any status', options: ['ACTIVE', 'PENDING', 'SUSPENDED', 'ARCHIVED'] }]} />
       <DataTable loading={list.loading} rows={list.rows} meta={list.meta} onPage={list.page} onRowClick={(r) => nav(`/tenants/${r.id}`)}
         columns={[

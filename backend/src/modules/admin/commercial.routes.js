@@ -414,3 +414,29 @@ commercialAdminRouter.post('/subscription-requests/:id/approve', can('subscripti
 commercialAdminRouter.post('/subscription-requests/:id/reject', can('subscriptions:manage'), validate({
   ...idParam, body: z.object({ reason: z.string().trim().min(5).max(1000) }).strict(),
 }), asyncHandler(async (req, res) => ok(res, await rejectRequest({ id: req.params.id, reason: req.body.reason, actor: platformActor(req), req }))));
+
+// =========================================================================== platform reports
+/** Every company with plan, status, usage against limits and MRR contribution. CSV for spreadsheets. */
+commercialAdminRouter.get('/reports/companies', can('tenants:view'), validate({ query: z.object({ format: z.enum(['json', 'csv']).default('json') }) }), asyncHandler(async (req, res) => {
+  const rows = await systemDb.query(`
+    SELECT t.name AS company, t.slug, t.status AS company_status, p.name AS plan, s.status AS subscription_status, s.billing_cycle,
+           to_char(coalesce(s.current_period_end, s.trial_ends_at), 'YYYY-MM-DD') AS period_end,
+           coalesce((SELECT value FROM subscription_usage u WHERE u.tenant_id = t.id AND u.metric = 'employees'), 0)::int AS employees,
+           coalesce(s.max_employees_override, p.max_employees) AS employee_limit,
+           CASE WHEN s.status IN ('ACTIVE','PAST_DUE') AND s.payment_status = 'PAID'
+                THEN round(CASE WHEN s.billing_cycle = 'ANNUAL' THEN s.amount / 12 ELSE s.amount END, 2) ELSE 0 END::float AS mrr,
+           to_char(t.created_at, 'YYYY-MM-DD') AS created
+      FROM tenants t
+      LEFT JOIN LATERAL (SELECT * FROM subscriptions x WHERE x.tenant_id = t.id ORDER BY x.created_at DESC LIMIT 1) s ON true
+      LEFT JOIN plans p ON p.id = s.plan_id
+     ORDER BY t.created_at DESC`, { type: QueryTypes.SELECT });
+  await audit({ actor: platformActor(req), action: 'report.export', entityType: 'report', after: { report: 'companies', format: req.query.format }, req });
+  if (req.query.format === 'csv') {
+    const cols = Object.keys(rows[0] ?? { company: '' });
+    const esc = (v) => { let s = v == null ? '' : String(v); if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`; return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="companies-${new Date().toISOString().slice(0, 10)}.csv"`);
+    return res.send('﻿' + [cols.join(','), ...rows.map((r) => cols.map((c) => esc(r[c])).join(','))].join('\r\n') + '\r\n');
+  }
+  return ok(res, rows);
+}));

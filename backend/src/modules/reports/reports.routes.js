@@ -6,6 +6,10 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import ExcelJS from 'exceljs';
+import PDFDocument from 'pdfkit';
+import { getPolicy, rangeSummary } from '../../services/hr/attendance.js';
+import { balances } from '../leave/leave.routes.js';
+import { getUsage } from '../../services/subscription.service.js';
 import { appDb } from '../../database/index.js';
 import { requirePermission } from '../../middleware/authorize.js';
 import { validate } from '../../middleware/common.js';
@@ -24,7 +28,7 @@ const query = z.object({
   fiscalYear: z.string().regex(/^\d{4}\/\d{2}$/).optional(),
   branchId: z.string().uuid().optional(),
   departmentId: z.string().uuid().optional(),
-  format: z.enum(['json', 'csv', 'xlsx']).default('json'),
+  format: z.enum(['json', 'csv', 'xlsx', 'pdf']).default('json'),
 });
 
 const MAX_RANGE_DAYS = 400;
@@ -185,11 +189,127 @@ const REPORTS = {
       },
     };
   },
+  /** Late arrivals, early departures, absences and missing punches per employee. */
+  async punctuality(req, t, q, tz) {
+    const { from, to } = range(q, tz);
+    const f = await employeeFilter(req, t);
+    const emps = await sel(t, `SELECT e.id FROM employees e WHERE ${f.sql} AND e.joined_on <= :to AND (e.exited_on IS NULL OR e.exited_on >= :from)`, { ...f.rep, from, to });
+    const policy = await getPolicy(t);
+    const sum = emps.length ? await rangeSummary(t, { employeeIds: emps.map((e) => e.id), from, to, tz, policy }) : [];
+    const rows = sum.map((s) => ({ code: s.code, name: s.name, working_days: s.workingDays, present: s.present, late_days: s.late, late_minutes: s.lateMinutes, early_days: s.early, absent: s.absent, missing_punch: s.missingPunch, rule_days: s.lateDeductionDays }))
+      .sort((a, b) => b.late_days + b.absent - (a.late_days + a.absent));
+    const tot = (k) => round(rows.reduce((n, r) => n + Number(r[k] || 0), 0), 1);
+    return {
+      title: 'Late arrivals & absences', period: { from, to },
+      summary: [['Late arrivals', tot('late_days')], ['Late minutes', tot('late_minutes')], ['Early departures', tot('early_days')], ['Absent days', tot('absent')], ['Missing check-outs', tot('missing_punch')]],
+      chart: { type: 'bar', x: 'name', series: [['late_days', 'Late days'], ['absent', 'Absent days']], data: rows.slice(0, 15) },
+      table: { columns: [['code', 'Code'], ['name', 'Employee'], ['working_days', 'Working days'], ['present', 'Present'], ['late_days', 'Late days'], ['late_minutes', 'Late minutes'], ['early_days', 'Early departures'], ['absent', 'Absent'], ['missing_punch', 'Missing check-out'], ['rule_days', 'Unpaid days (late rule)']], rows },
+    };
+  },
+
+  /** Current leave balances per employee and leave type. */
+  async balances(req, t, q, tz) {
+    const fy = q.fiscalYear ?? fiscalYear(localDate(new Date(), tz));
+    const f = await employeeFilter(req, t);
+    const emps = await sel(t, `SELECT e.id, e.employee_code AS code, e.first_name || ' ' || e.last_name AS name, e.gender FROM employees e WHERE ${f.sql} AND e.status <> 'TERMINATED' ORDER BY 3 LIMIT 2000`, f.rep);
+    const rows = [];
+    for (const e of emps) {
+      for (const b of await balances(t, { id: e.id, gender: e.gender }, fy, tz)) {
+        if (!b.tracked) continue;
+        rows.push({ code: e.code, name: e.name, type: b.name, entitled: b.entitled, used: b.used, pending: b.pending, available: b.available });
+      }
+    }
+    const byType = Object.values(rows.reduce((m, r) => { (m[r.type] ??= { type: r.type, used: 0, available: 0 }); m[r.type].used += r.used; m[r.type].available += r.available; return m; }, {}))
+      .map((x) => ({ ...x, used: round(x.used, 1), available: round(x.available, 1) }));
+    return {
+      title: `Leave balances FY ${fy}`, period: { fiscalYear: fy },
+      summary: [['Employees', emps.length], ['Days used', round(rows.reduce((n, r) => n + r.used, 0), 1)], ['Days available', round(rows.reduce((n, r) => n + r.available, 0), 1)]],
+      chart: { type: 'bar', x: 'type', series: [['used', 'Used'], ['available', 'Available']], data: byType },
+      table: { columns: [['code', 'Code'], ['name', 'Employee'], ['type', 'Leave type'], ['entitled', 'Entitled'], ['used', 'Used'], ['pending', 'Pending'], ['available', 'Available']], rows },
+    };
+  },
+
+  /** Overtime pay and every deduction type, per employee, from approved payroll in a fiscal year. */
+  async deductions(req, t, q, tz) {
+    const fy = q.fiscalYear ?? fiscalYear(localDate(new Date(), tz));
+    const f = await employeeFilter(req, t);
+    const items = await sel(t, `
+      SELECT e.employee_code AS code, e.first_name || ' ' || e.last_name AS name, i.lines, i.attendance, i.tax
+        FROM payroll_items i JOIN payroll_runs r ON r.tenant_id = i.tenant_id AND r.id = i.run_id
+        JOIN employees e ON e.tenant_id = i.tenant_id AND e.id = i.employee_id
+       WHERE ${f.sql} AND r.fiscal_year = :fy AND r.status IN ('APPROVED', 'PAID')`, { ...f.rep, fy });
+    const per = new Map();
+    const lineSum = (lines, pred) => lines.filter(pred).reduce((n, l) => n + Number(l.amount), 0);
+    for (const it of items) {
+      const p = per.get(it.code) ?? { code: it.code, name: it.name, overtime_hours: 0, overtime_pay: 0, unpaid_days: 0, late_rule_days: 0, ssf_pf_cit: 0, tax: 0, advances_loans: 0, fines_other: 0 };
+      p.overtime_hours += Number(it.attendance?.overtimeMinutes ?? 0) / 60;
+      p.overtime_pay += lineSum(it.lines, (l) => l.code === 'OVERTIME');
+      p.unpaid_days += Number(it.attendance?.unpaidDays ?? 0);
+      p.late_rule_days += Number(it.attendance?.unpaidBreakdown?.lateRule ?? 0);
+      p.ssf_pf_cit += lineSum(it.lines, (l) => ['SSF', 'PF', 'CIT'].includes(l.code));
+      p.tax += Number(it.tax);
+      p.advances_loans += lineSum(it.lines, (l) => l.loanId);
+      p.fines_other += lineSum(it.lines, (l) => l.kind === 'DEDUCTION' && !['SSF', 'PF', 'CIT', 'TDS'].includes(l.code) && !l.loanId);
+      per.set(it.code, p);
+    }
+    const out = [...per.values()].map((p) => Object.fromEntries(Object.entries(p).map(([k, v]) => [k, typeof v === 'number' ? round(v) : v])));
+    const tot = (k) => round(out.reduce((n, r) => n + r[k], 0));
+    return {
+      title: `Overtime & deductions FY ${fy}`, period: { fiscalYear: fy }, money: true,
+      note: 'From approved and paid payroll runs.',
+      summary: [['Overtime pay', tot('overtime_pay')], ['Unpaid days', tot('unpaid_days')], ['Tax (TDS)', tot('tax')], ['Advances & loans recovered', tot('advances_loans')], ['Fines & other', tot('fines_other')]],
+      chart: { type: 'bar', x: 'name', series: [['overtime_pay', 'Overtime pay'], ['advances_loans', 'Advances & loans']], data: out.slice(0, 15) },
+      table: { columns: [['code', 'Code'], ['name', 'Employee'], ['overtime_hours', 'OT hours'], ['overtime_pay', 'OT pay'], ['unpaid_days', 'Unpaid days'], ['late_rule_days', 'Of which late rule'], ['ssf_pf_cit', 'SSF/PF/CIT'], ['tax', 'Tax'], ['advances_loans', 'Advances/loans'], ['fines_other', 'Fines & other']], rows: out },
+    };
+  },
+
+  /** Biometric device activity in a date range. */
+  async devices(req, t, q, tz) {
+    const { from, to } = range(q, tz);
+    const rep = { from: `${from}T00:00:00+05:45`, to: `${addDays(to, 1)}T00:00:00+05:45` };
+    const rows = await sel(t, `
+      SELECT d.name AS device, d.serial_number AS serial, coalesce(b.name, '') AS branch, d.status,
+             to_char(d.last_seen_at AT TIME ZONE 'Asia/Kathmandu', 'YYYY-MM-DD HH24:MI') AS last_seen,
+             count(p.id) FILTER (WHERE p.result = 'APPLIED')::int AS applied, count(p.id) FILTER (WHERE p.result = 'UNMAPPED')::int AS unmapped,
+             count(p.id) FILTER (WHERE p.result IN ('IGNORED', 'ERROR'))::int AS ignored,
+             (SELECT count(*) FROM device_logs l WHERE l.tenant_id = d.tenant_id AND l.device_id = d.id AND l.level = 'ERROR' AND l.created_at >= CAST(:from AS timestamptz) AND l.created_at < CAST(:to AS timestamptz))::int AS errors
+        FROM attendance_devices d LEFT JOIN branches b ON b.tenant_id = d.tenant_id AND b.id = d.branch_id
+        LEFT JOIN device_punches p ON p.tenant_id = d.tenant_id AND p.device_id = d.id AND p.punched_at >= CAST(:from AS timestamptz) AND p.punched_at < CAST(:to AS timestamptz)
+       WHERE d.deleted_at IS NULL GROUP BY d.id, b.name ORDER BY d.name`, rep);
+    const tot = (k) => rows.reduce((n, r) => n + r[k], 0);
+    return {
+      title: 'Attendance device activity', period: { from, to },
+      summary: [['Devices', rows.length], ['Punches applied', tot('applied')], ['Unmapped punches', tot('unmapped')], ['Ignored', tot('ignored')], ['Errors', tot('errors')]],
+      chart: { type: 'bar', x: 'device', series: [['applied', 'Applied'], ['unmapped', 'Unmapped']], data: rows },
+      table: { columns: [['device', 'Device'], ['serial', 'Serial'], ['branch', 'Branch'], ['status', 'Status'], ['last_seen', 'Last contact'], ['applied', 'Applied'], ['unmapped', 'Unmapped'], ['ignored', 'Ignored'], ['errors', 'Errors']], rows },
+    };
+  },
+
+  /** Plan, usage against limits and enabled features. */
+  async subscription(req, t) {
+    const ctx = req.auth.ctx;
+    const usage = await getUsage(t);
+    const lim = ctx.limits;
+    const pct = (u, l) => (l ? `${Math.round((u / l) * 100)}%` : 'Unlimited');
+    const rows = [
+      { metric: 'Employees', used: usage.employees, limit: lim.employees ?? 'Unlimited', share: pct(usage.employees, lim.employees) },
+      { metric: 'Branches', used: usage.branches, limit: lim.branches ?? 'Unlimited', share: pct(usage.branches, lim.branches) },
+      { metric: 'Users', used: usage.users, limit: lim.users ?? 'Unlimited', share: pct(usage.users, lim.users) },
+      { metric: 'Storage (MB)', used: usage.storageMb, limit: lim.storageMb ?? 'Unlimited', share: pct(usage.storageMb, lim.storageMb) },
+    ];
+    return {
+      title: 'Subscription usage', period: { from: localDate(new Date()), to: localDate(new Date()) },
+      summary: [['Plan', ctx.subscription?.planName ?? '—'], ['Status', ctx.subscription?.status?.toLowerCase() ?? '—'], ['Renews / ends', ctx.subscription?.currentPeriodEnd ? localDate(new Date(ctx.subscription.currentPeriodEnd)) : '—'], ['Features enabled', ctx.features.length]],
+      chart: { type: 'bar', x: 'metric', series: [['used', 'Used']], data: rows.filter((r) => typeof r.limit === 'number').map((r) => ({ metric: r.metric, used: r.used })) },
+      table: { columns: [['metric', 'Limit'], ['used', 'Used'], ['limit', 'Allowed'], ['share', 'Used %']], rows },
+    };
+  },
 };
 
 /** Payroll figures only for people who may see other people's payroll (not OWN-scope self-service). */
 const wideGrant = (req, key) => (req.auth.grants.get(key)?.scopes ?? []).some((s) => s.scope !== 'OWN');
-const EXTRA_PERMISSION = { payroll: 'payroll:view' };
+const EXTRA_PERMISSION = { payroll: 'payroll:view', deductions: 'payroll:view', devices: 'devices:view', subscription: 'subscription:view' };
+const FEATURE_FOR = { payroll: 'payroll', deductions: 'payroll', devices: 'biometric', punctuality: 'attendance', attendance: 'attendance', leave: 'leave', balances: 'leave' };
 
 // ----------------------------------------------------------------------------- export
 function toCsv(report) {
@@ -222,21 +342,59 @@ async function toXlsx(report, companyName) {
   return wb.xlsx.writeBuffer();
 }
 
+/** A4 landscape table, repeated header on each page. */
+function toPdf(report, companyName, res, filename) {
+  const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 36, info: { Title: report.title } });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename="${filename}.pdf"`);
+  doc.pipe(res);
+  const p = report.period;
+  doc.fontSize(15).fillColor('#0f1729').text(`${companyName}: ${report.title}`);
+  doc.fontSize(9).fillColor('#64748b').text(`${p.fiscalYear ? `Fiscal year ${p.fiscalYear}` : `${p.from} to ${p.to}`} · generated ${new Date().toISOString().slice(0, 16).replace('T', ' ')} UTC`);
+  doc.moveDown(0.6).fontSize(9).fillColor('#334155').text(report.summary.map(([k, v]) => `${k}: ${report.money && typeof v === 'number' ? v.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : v}`).join('   ·   '));
+  if (report.note) doc.fontSize(8).fillColor('#64748b').text(report.note);
+  const cols = report.table.columns;
+  const width = doc.page.width - 72;
+  const w = width / cols.length;
+  const fmt = (v) => (v == null ? '' : report.money && typeof v === 'number' ? v.toLocaleString('en-IN', { minimumFractionDigits: 2 }) : String(v));
+  let y = doc.y + 12;
+  const header = () => {
+    doc.rect(36, y - 3, width, 16).fill('#e8eefc');
+    doc.fillColor('#0f1729').fontSize(7.5).font('Helvetica-Bold');
+    cols.forEach(([, l], i) => doc.text(l, 38 + i * w, y, { width: w - 4, ellipsis: true, lineBreak: false }));
+    doc.font('Helvetica'); y += 16;
+  };
+  header();
+  for (const row of report.table.rows) {
+    if (y > doc.page.height - 50) { doc.addPage(); y = 40; header(); }
+    doc.fillColor('#334155').fontSize(7.5);
+    cols.forEach(([k], i) => doc.text(fmt(row[k]), 38 + i * w, y, { width: w - 4, ellipsis: true, lineBreak: false, align: typeof row[k] === 'number' ? 'right' : 'left' }));
+    y += 13;
+  }
+  if (!report.table.rows.length) doc.fillColor('#64748b').fontSize(9).text('No data for these filters.', 36, y);
+  doc.end();
+}
+
 // ----------------------------------------------------------------------------- routes
 reportsRouter.get('/', requirePermission('reports:view'), (req, res) => ok(res, { canExport: req.auth.ctx.features.includes('reports_advanced'), reports: [
   { key: 'headcount', name: 'Headcount & turnover', filters: ['range', 'branch', 'department'] },
   { key: 'attendance', name: 'Attendance & overtime', filters: ['range', 'branch', 'department'] },
   { key: 'leave', name: 'Leave utilisation', filters: ['fiscalYear', 'branch', 'department'] },
+  { key: 'punctuality', name: 'Late & absences', filters: ['range', 'branch', 'department'] },
+  { key: 'balances', name: 'Leave balances', filters: ['fiscalYear', 'branch', 'department'] },
   { key: 'payroll', name: 'Payroll cost', filters: ['fiscalYear', 'branch', 'department'], requires: 'payroll:view' },
-].filter((r) => r.key !== 'payroll' || req.auth.ctx.features.includes('payroll')) }));
+  { key: 'deductions', name: 'Overtime & deductions', filters: ['fiscalYear', 'branch', 'department'], requires: 'payroll:view' },
+  { key: 'devices', name: 'Device activity', filters: ['range'], requires: 'devices:view' },
+  { key: 'subscription', name: 'Subscription usage', filters: [], requires: 'subscription:view' },
+].filter((r) => !FEATURE_FOR[r.key] || req.auth.ctx.features.includes(FEATURE_FOR[r.key])) }));
 
 reportsRouter.get('/:key', requirePermission('reports:view'), validate({ query }), asyncHandler(async (req, res) => {
   const fn = REPORTS[req.params.key];
   if (!fn) throw BadRequest('Unknown report');
   const extra = EXTRA_PERMISSION[req.params.key];
   const features = req.auth.ctx.features;
-  if (req.params.key === 'payroll' && !features.includes('payroll')) throw FeatureNotInPlan('payroll');
-  if (extra && !wideGrant(req, extra)) throw Forbidden('You need payroll access for this report');
+  if (FEATURE_FOR[req.params.key] && !features.includes(FEATURE_FOR[req.params.key])) throw FeatureNotInPlan(FEATURE_FOR[req.params.key]);
+  if (extra && !wideGrant(req, extra)) throw Forbidden(`This report needs ${extra.split(':')[0]} access`);
   const q = req.query;
   if (q.format !== 'json') {
     if (!features.includes('reports_advanced')) throw FeatureNotInPlan('reports_advanced'); // export is an "Advanced Reports" capability
@@ -254,6 +412,7 @@ reportsRouter.get('/:key', requirePermission('reports:view'), validate({ query }
     res.setHeader('Content-Disposition', `attachment; filename="${file}.csv"`);
     return res.send(toCsv(report));
   }
+  if (q.format === 'pdf') return toPdf(report, companyName, res, file);
   if (q.format === 'xlsx') {
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${file}.xlsx"`);

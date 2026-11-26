@@ -2,6 +2,7 @@
  * Background worker process (run separately from the API: `npm run worker`).
  *  - subscriptions: repeatable lifecycle sweep (expiry -> grace -> read-only)
  *  - documents: daily expiry reminders (08:05 Kathmandu)
+ *  - subscription notices: trial/period ending, employee limit 80%/100% (08:30)
  *  - attendance: daily late / missing punch / absence follow-up (09:15)
  *  - devices: offline alerts (every 5 min), raw punch/log retention (daily)
  *  - notifications: email delivery with retries; delivery is logged
@@ -18,6 +19,7 @@ import { Op } from 'sequelize';
 import { documentExpiryAlerts } from '../services/hr/document-alerts.js';
 import { deviceOfflineAlerts, deviceRetention } from '../services/biometric/monitor.js';
 import { attendanceAlerts } from '../services/hr/attendance-alerts.js';
+import { subscriptionNotices } from '../services/subscription-notices.js';
 
 if (!env.REDIS_URL) {
   logger.fatal('REDIS_URL is required for the worker');
@@ -49,6 +51,7 @@ const subscriptionWorker = new Worker(QUEUES.SUBSCRIPTIONS, async (job) => {
   if (job.name === 'document-expiry') return documentExpiryAlerts();
   if (job.name === 'device-offline') return deviceOfflineAlerts();
   if (job.name === 'attendance-alerts') return attendanceAlerts();
+  if (job.name === 'subscription-notices') return subscriptionNotices();
   if (job.name === 'device-retention') return deviceRetention();
   if (job.name !== 'lifecycle-sweep') return;
   const changes = await sweepSubscriptions(new Date());
@@ -74,6 +77,7 @@ await subsQ.upsertJobScheduler('lifecycle-sweep', { every: 15 * 60_000 }, { name
 await subsQ.upsertJobScheduler('payment-reconcile', { every: 10 * 60_000 }, { name: 'payment-reconcile' });
 await subsQ.upsertJobScheduler('renewal-invoices', { pattern: '15 2 * * *', tz: 'Asia/Kathmandu' }, { name: 'renewal-invoices' });
 await subsQ.upsertJobScheduler('document-expiry', { pattern: '5 8 * * *', tz: 'Asia/Kathmandu' }, { name: 'document-expiry' });
+await subsQ.upsertJobScheduler('subscription-notices', { pattern: '30 8 * * *', tz: 'Asia/Kathmandu' }, { name: 'subscription-notices' });
 await subsQ.upsertJobScheduler('attendance-alerts', { pattern: '15 9 * * *', tz: 'Asia/Kathmandu' }, { name: 'attendance-alerts' });
 await subsQ.upsertJobScheduler('device-offline', { every: 5 * 60_000 }, { name: 'device-offline' });
 await subsQ.upsertJobScheduler('device-retention', { pattern: '40 3 * * *', tz: 'Asia/Kathmandu' }, { name: 'device-retention' });
