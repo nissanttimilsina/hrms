@@ -256,7 +256,7 @@ const toSlug = (s) => s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '
 export function Signup() {
   const [params] = useSearchParams();
   const { data: plans } = usePlans();
-  const [v, setV] = useState({ companyName: '', slug: '', industry: '', employeeCount: '', fullName: '', email: '', phone: '', password: '', planCode: params.get('plan') || 'STANDARD', billingCycle: params.get('cycle') || 'MONTHLY', acceptTerms: false, website: '' });
+  const [v, setV] = useState({ companyName: '', slug: '', industry: '', employeeCount: '', fullName: '', email: '', phone: '', password: '', planCode: params.get('plan') || 'PROFESSIONAL', billingCycle: params.get('cycle') || 'MONTHLY', acceptTerms: false, website: '' });
   const [slugTouched, setSlugTouched] = useState(false);
   const [slugState, setSlugState] = useState(null);
   const [errors, setErrors] = useState({});

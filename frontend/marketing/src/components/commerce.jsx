@@ -70,7 +70,7 @@ export function CycleToggle({ cycle, setCycle, maxSavePercent }) {
 }
 
 export function PlanCards({ plans, cycle, compact }) {
-  const popular = 'STANDARD';
+  const popular = 'PROFESSIONAL';
   return (
     <div className={cn('grid gap-5', compact ? 'md:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-2 lg:grid-cols-4')}>
       {plans.map((p) => {

@@ -192,7 +192,7 @@ export function Pricing() {
   const maxSave = Math.max(0, ...(plans ?? []).map((p) => p.annualSavings?.percent ?? 0));
   return (
     <>
-      <Seo title="Pricing" description="Transparent HRMS pricing in NPR. Basic, Standard, Premium and Enterprise plans with monthly or annual billing and a free trial." path="/pricing" />
+      <Seo title="Pricing" description="Transparent HRMS pricing in NPR. Basic, Professional, Business and Enterprise plans with monthly or annual billing and a free trial." path="/pricing" />
       <section className="border-b border-line bg-white">
         <Container className="py-14 text-center sm:py-20">
           <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">Plans for every stage of growth</h1>

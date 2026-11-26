@@ -64,7 +64,7 @@ describe('Subscription engine', () => {
     });
 
     it('Super Admin can create a tenant that invites its owner', async () => {
-      const res = await asAdmin(admin).post('/tenants').send({ slug: 'invited', name: 'Invited Co', planCode: 'STANDARD', owner: { email: 'boss@invited.test', fullName: 'Boss' } });
+      const res = await asAdmin(admin).post('/tenants').send({ slug: 'invited', name: 'Invited Co', planCode: 'PROFESSIONAL', owner: { email: 'boss@invited.test', fullName: 'Boss' } });
       assert.equal(res.status, 201);
       assert.equal(res.body.data.ownerStatus, 'INVITED');
       assert.equal(res.body.data.hostname, 'invited.hrms.test');
@@ -127,7 +127,7 @@ describe('Subscription engine', () => {
   describe('expiry, grace period and read-only mode', () => {
     let T; let tok;
     before(async () => {
-      T = await makeTenant('lifecycle', 'STANDARD');
+      T = await makeTenant('lifecycle', 'PROFESSIONAL');
       tok = (await login('lifecycle', T.ownerEmail)).token;
       await as('lifecycle', tok).post('/employees').send(newEmployee(1));
     });
@@ -190,7 +190,7 @@ describe('Subscription engine', () => {
       const tok = (await login('upgrade', T.ownerEmail)).token;
       const before = (await as('upgrade', tok).get('/subscription')).body.data;
       assert.ok(!before.features.includes('payroll'));
-      const res = await asAdmin(admin).patch(`/tenants/${T.id}/subscription/plan`).send({ planCode: 'PREMIUM' });
+      const res = await asAdmin(admin).patch(`/tenants/${T.id}/subscription/plan`).send({ planCode: 'BUSINESS' });
       assert.equal(res.status, 200);
       const after = (await as('upgrade', tok).get('/subscription')).body.data;
       assert.ok(after.features.includes('payroll'));
@@ -227,7 +227,7 @@ describe('Subscription engine', () => {
 
     it('public plans: 4 plans, enterprise is contact-sales without a price', async () => {
       const pub = (await api().get('/api/v1/public/plans').set('Host', 'www.yourhrms.com')).body.data;
-      assert.deepEqual(pub.map((p) => p.code), ['BASIC', 'STANDARD', 'PREMIUM', 'ENTERPRISE']);
+      assert.deepEqual(pub.map((p) => p.code), ['BASIC', 'PROFESSIONAL', 'BUSINESS', 'ENTERPRISE']);
       const ent = pub.at(-1);
       assert.equal(ent.contactSales, true);
       assert.equal(ent.prices.monthly, null);
@@ -235,9 +235,9 @@ describe('Subscription engine', () => {
     });
 
     it('entitlement edits propagate to tenants on that plan', async () => {
-      const T = await makeTenant('entl', 'STANDARD');
+      const T = await makeTenant('entl', 'PROFESSIONAL');
       const tok = (await login('entl', T.ownerEmail)).token;
-      const std = (await asAdmin(admin).get('/plans')).body.data.find((p) => p.code === 'STANDARD');
+      const std = (await asAdmin(admin).get('/plans')).body.data.find((p) => p.code === 'PROFESSIONAL');
       const current = std.entitlements.map((e) => e.feature.key);
       await asAdmin(admin).put(`/plans/${std.id}/entitlements`).send({ features: [...current, 'assets'] });
       assert.ok((await as('entl', tok).get('/subscription')).body.data.features.includes('assets'));

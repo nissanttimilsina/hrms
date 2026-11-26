@@ -17,7 +17,7 @@ describe('Core HRMS', () => {
 
   before(async () => {
     await resetDatabase();
-    T = await makeTenant('acmehr', 'PREMIUM');
+    T = await makeTenant('acmehr', 'BUSINESS');
     owner = as('acmehr', (await login('acmehr', T.ownerEmail)).token);
     hq = (await owner.get('/branches')).body.data[0];
     eng = (await owner.post('/departments').send({ code: 'ENG', name: 'Engineering' })).body.data;

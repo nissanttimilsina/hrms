@@ -188,7 +188,7 @@ export function LeadDetail() {
         { name: 'estimatedValue', label: 'Estimated annual value (NPR)', type: 'number' }, { name: 'interestedPlan', label: 'Interested plan' },
         { name: 'lostReason', label: 'Lost reason (required if lost)', type: 'textarea' },
       ]} loading={update.isPending} error={update.error} onSubmit={(b) => update.mutate(b)} />
-      <FormDialog open={dlg === 'convert'} onClose={() => setDlg(null)} title="Convert to company" description={`Creates a workspace and emails an invitation to ${l.email}.`} initial={{ planCode: l.interestedPlan || 'STANDARD', billingCycle: 'MONTHLY', trial: true, slug: (l.company || l.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) }} fields={[
+      <FormDialog open={dlg === 'convert'} onClose={() => setDlg(null)} title="Convert to company" description={`Creates a workspace and emails an invitation to ${l.email}.`} initial={{ planCode: l.interestedPlan || 'PROFESSIONAL', billingCycle: 'MONTHLY', trial: true, slug: (l.company || l.name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 30) }} fields={[
         { name: 'slug', label: 'Workspace', required: true }, { name: 'planCode', label: 'Plan', type: 'select', options: (plans ?? []).map((p) => ({ value: p.code, label: p.name })) },
         { name: 'billingCycle', label: 'Billing', type: 'select', options: [{ value: 'MONTHLY', label: 'Monthly' }, { value: 'ANNUAL', label: 'Annual' }] },
         { name: 'maxEmployees', label: 'Negotiated employee limit', type: 'number' }, { name: 'maxBranches', label: 'Negotiated branch limit', type: 'number' }, { name: 'trial', type: 'checkbox', checkLabel: 'Start with trial' },

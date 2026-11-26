@@ -8,7 +8,7 @@ describe('RBAC & data scopes', () => {
 
   before(async () => {
     await resetDatabase();
-    T = await makeTenant('rbac', 'PREMIUM');
+    T = await makeTenant('rbac', 'BUSINESS');
     owner = (await login('rbac', T.ownerEmail)).token;
     const o = as('rbac', owner);
     branchHQ = (await o.get('/branches')).body.data[0];

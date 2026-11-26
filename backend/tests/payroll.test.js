@@ -61,7 +61,7 @@ describe('Payroll', () => {
   describe('payroll run workflow', () => {
     let T; let maker; let checker; let empTok; let e1; let e2; let runId; let period;
     before(async () => {
-      T = await makeTenant('payrollco', 'STANDARD');
+      T = await makeTenant('payrollco', 'PROFESSIONAL');
       const owner = as('payrollco', (await login('payrollco', T.ownerEmail)).token);
       const fy = fiscalYearRange(fiscalYear(localDate()));
       e1 = (await owner.post('/employees').send({ firstName: 'Asha', lastName: 'Rai', joinedOn: fy.start, gender: 'FEMALE', pan: '111111111', bank: { bankName: 'Nabil', accountName: 'Asha Rai', accountNumber: '00112233445566' } })).body.data;

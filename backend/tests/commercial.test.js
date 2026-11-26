@@ -19,7 +19,7 @@ function mockProviders(responses) {
   });
 }
 
-async function paidTenant(slug, planCode = 'STANDARD') {
+async function paidTenant(slug, planCode = 'PROFESSIONAL') {
   const t = await makeTenant(slug, planCode, { trial: false });
   await db.sys.Subscription.update({ paymentStatus: 'PAID' }, { where: { id: t.subscriptionId } });
   return t;
@@ -40,9 +40,9 @@ describe('Commercial engine', () => {
       assert.equal(r.total, r2(1499 * 1.13));
     });
     it('employee count and modules drive the recommendation', async () => {
-      assert.equal((await pub().post('/pricing/quote').send({ employees: 40 })).body.data.recommended, 'STANDARD');
-      assert.equal((await pub().post('/pricing/quote').send({ employees: 10, modules: ['payroll'] })).body.data.recommended, 'STANDARD');
-      assert.equal((await pub().post('/pricing/quote').send({ employees: 10, branches: 4 })).body.data.recommended, 'PREMIUM');
+      assert.equal((await pub().post('/pricing/quote').send({ employees: 40 })).body.data.recommended, 'PROFESSIONAL');
+      assert.equal((await pub().post('/pricing/quote').send({ employees: 10, modules: ['payroll'] })).body.data.recommended, 'PROFESSIONAL');
+      assert.equal((await pub().post('/pricing/quote').send({ employees: 10, branches: 4 })).body.data.recommended, 'BUSINESS');
       assert.equal((await pub().post('/pricing/quote').send({ employees: 30, billingCycle: 'ANNUAL' })).body.data.subtotal, 29990);
     });
     it('beyond every package → Enterprise enquiry with reasons', async () => {
@@ -53,7 +53,7 @@ describe('Commercial engine', () => {
       assert.ok(r.reasons.some((x) => x.includes('ai_assistant')));
     });
     it('applies a valid promo code and rejects invalid ones', async () => {
-      await asAdmin(admin).post('/coupons').send({ code: 'LAUNCH20', percentOff: 20, planCodes: ['BASIC', 'STANDARD'] });
+      await asAdmin(admin).post('/coupons').send({ code: 'LAUNCH20', percentOff: 20, planCodes: ['BASIC', 'PROFESSIONAL'] });
       const r = (await pub().post('/pricing/quote').send({ employees: 15, coupon: 'launch20' })).body.data;
       assert.equal(r.discount, r2(1499 * 0.2));
       assert.equal(r.total, r2((1499 - r2(1499 * 0.2)) * 1.13));
@@ -107,7 +107,7 @@ describe('Commercial engine', () => {
     });
     it('a won lead converts into a tenant with negotiated limits', async () => {
       const lead = await db.sys.Lead.findOne({ where: { email: 'hari@everest.test' } });
-      const res = await asAdmin(admin).post(`/leads/${lead.id}/convert`).send({ slug: 'everest', planCode: 'PREMIUM', maxEmployees: 200 });
+      const res = await asAdmin(admin).post(`/leads/${lead.id}/convert`).send({ slug: 'everest', planCode: 'BUSINESS', maxEmployees: 200 });
       assert.equal(res.status, 201);
       const reloaded = await db.sys.Lead.findByPk(lead.id);
       assert.equal(reloaded.status, 'WON');
@@ -118,7 +118,7 @@ describe('Commercial engine', () => {
 
   // ------------------------------------------------------------------ self-service signup
   describe('self-service signup', () => {
-    const form = (over = {}) => ({ companyName: 'Himal Traders', slug: 'himal', industry: 'Retail and Trading', employeeCount: 25, fullName: 'Sita Karki', email: 'sita@himal.test', phone: '9841000000', password: 'Himal#Pass2026', planCode: 'STANDARD', billingCycle: 'MONTHLY', acceptTerms: true, ...over });
+    const form = (over = {}) => ({ companyName: 'Himal Traders', slug: 'himal', industry: 'Retail and Trading', employeeCount: 25, fullName: 'Sita Karki', email: 'sita@himal.test', phone: '9841000000', password: 'Himal#Pass2026', planCode: 'PROFESSIONAL', billingCycle: 'MONTHLY', acceptTerms: true, ...over });
     let token;
 
     it('checks workspace availability', async () => {
@@ -164,8 +164,8 @@ describe('Commercial engine', () => {
       tok = (await login('payco', T.ownerEmail)).token;
     });
 
-    it('trial → Standard creates an invoice with VAT and reuses it on retry', async () => {
-      const res = await as('payco', tok).post('/billing/checkout').send({ planCode: 'STANDARD', billingCycle: 'MONTHLY' });
+    it('trial → Professional creates an invoice with VAT and reuses it on retry', async () => {
+      const res = await as('payco', tok).post('/billing/checkout').send({ planCode: 'PROFESSIONAL', billingCycle: 'MONTHLY' });
       assert.equal(res.status, 201);
       invoice = res.body.data.invoice;
       assert.equal(invoice.kind, 'SUBSCRIPTION');
@@ -173,7 +173,7 @@ describe('Commercial engine', () => {
       assert.equal(Number(invoice.tax), r2(2999 * 0.13));
       assert.equal(Number(invoice.total), r2(2999 * 1.13));
       assert.match(invoice.number, /^INV-\d{4}-\d{6}$/);
-      const again = await as('payco', tok).post('/billing/checkout').send({ planCode: 'STANDARD', billingCycle: 'MONTHLY' });
+      const again = await as('payco', tok).post('/billing/checkout').send({ planCode: 'PROFESSIONAL', billingCycle: 'MONTHLY' });
       assert.equal(again.body.data.invoice.id, invoice.id);
     });
     it('Enterprise cannot be bought online', async () => {
@@ -198,7 +198,7 @@ describe('Commercial engine', () => {
       const sub = await db.sys.Subscription.findByPk(T.subscriptionId, { include: [{ model: db.sys.Plan, as: 'plan' }] });
       assert.equal(sub.status, 'ACTIVE');
       assert.equal(sub.paymentStatus, 'PAID');
-      assert.equal(sub.plan.code, 'STANDARD');
+      assert.equal(sub.plan.code, 'PROFESSIONAL');
       assert.ok(sub.currentPeriodEnd > new Date(Date.now() + 27 * DAY));
       assert.equal((await db.sys.Invoice.findByPk(invoice.id)).status, 'PAID');
       // approving twice is impossible
@@ -222,28 +222,28 @@ describe('Commercial engine', () => {
       const { makeUser } = await import('./helpers/context.js');
       await makeUser(T.id, { email: 'emp@payco.test', roles: ['employee'] });
       const etok = (await login('payco', 'emp@payco.test')).token;
-      assert.equal((await as('payco', etok).post('/billing/checkout').send({ planCode: 'PREMIUM', billingCycle: 'MONTHLY' })).status, 403);
+      assert.equal((await as('payco', etok).post('/billing/checkout').send({ planCode: 'BUSINESS', billingCycle: 'MONTHLY' })).status, 403);
     });
   });
 
   describe('upgrades, downgrades and read-only recovery', () => {
     it('mid-period upgrade charges the prorated difference and keeps the period end', async () => {
-      const T = await paidTenant('upco', 'STANDARD');
+      const T = await paidTenant('upco', 'PROFESSIONAL');
       const tok = (await login('upco', T.ownerEmail)).token;
       const end = new Date(Date.now() + 15 * DAY);
       await db.sys.Subscription.update({ currentPeriodEnd: end, startsAt: new Date(Date.now() - 15 * DAY) }, { where: { id: T.subscriptionId } });
-      const preview = (await as('upco', tok).post('/billing/preview').send({ planCode: 'PREMIUM', billingCycle: 'MONTHLY' })).body.data;
+      const preview = (await as('upco', tok).post('/billing/preview').send({ planCode: 'BUSINESS', billingCycle: 'MONTHLY' })).body.data;
       assert.equal(preview.kind, 'UPGRADE');
       assert.ok(preview.subtotal > 1300 && preview.subtotal < 1700, `prorated ~1500, got ${preview.subtotal}`);
-      const inv = (await as('upco', tok).post('/billing/checkout').send({ planCode: 'PREMIUM', billingCycle: 'MONTHLY' })).body.data.invoice;
+      const inv = (await as('upco', tok).post('/billing/checkout').send({ planCode: 'BUSINESS', billingCycle: 'MONTHLY' })).body.data.invoice;
       const p = (await as('upco', tok).post(`/billing/invoices/${inv.id}/pay`).send({ provider: 'BANK_TRANSFER', proofNote: 'Global IME ref 998877' })).body.data;
       await asAdmin(admin).post(`/payments/${p.paymentId}/approve`).send({ providerRef: 'GIME-998877' });
       const sub = await db.sys.Subscription.findByPk(T.subscriptionId, { include: [{ model: db.sys.Plan, as: 'plan' }] });
-      assert.equal(sub.plan.code, 'PREMIUM');
+      assert.equal(sub.plan.code, 'BUSINESS');
       assert.equal(sub.currentPeriodEnd.getTime(), end.getTime());
     });
     it('downgrade is scheduled for renewal, not charged', async () => {
-      const T = await paidTenant('downco', 'PREMIUM');
+      const T = await paidTenant('downco', 'BUSINESS');
       const tok = (await login('downco', T.ownerEmail)).token;
       const res = await as('downco', tok).post('/billing/checkout').send({ planCode: 'BASIC', billingCycle: 'MONTHLY' });
       assert.equal(res.body.data.scheduled, true);
@@ -268,7 +268,7 @@ describe('Commercial engine', () => {
   // ------------------------------------------------------------------ online payments
   describe('eSewa and Khalti (server-side verification)', () => {
     let T; let tok;
-    const newInvoice = async () => (await as('wallet', tok).post('/billing/checkout').send({ planCode: 'STANDARD', billingCycle: 'ANNUAL' })).body.data.invoice;
+    const newInvoice = async () => (await as('wallet', tok).post('/billing/checkout').send({ planCode: 'PROFESSIONAL', billingCycle: 'ANNUAL' })).body.data.invoice;
     before(async () => {
       T = await makeTenant('wallet', 'BASIC');
       tok = (await login('wallet', T.ownerEmail)).token;
@@ -299,7 +299,7 @@ describe('Commercial engine', () => {
 
     it('eSewa: forged signature is rejected without contacting eSewa', async () => {
       await db.sys.Subscription.update({ currentPeriodEnd: new Date(Date.now() + 3 * DAY) }, { where: { id: T.subscriptionId } });
-      const inv = (await as('wallet', tok).post('/billing/checkout').send({ planCode: 'PREMIUM', billingCycle: 'ANNUAL' })).body.data.invoice;
+      const inv = (await as('wallet', tok).post('/billing/checkout').send({ planCode: 'BUSINESS', billingCycle: 'ANNUAL' })).body.data.invoice;
       const start = (await as('wallet', tok).post(`/billing/invoices/${inv.id}/pay`).send({ provider: 'ESEWA' })).body.data;
       providerCalls.length = 0;
       const cb = { status: 'COMPLETE', total_amount: start.redirect.fields.total_amount, transaction_uuid: start.redirect.fields.transaction_uuid, product_code: 'EPAYTEST', signed_field_names: 'status,total_amount,transaction_uuid,product_code', signature: 'Zm9yZ2Vk' };
@@ -340,7 +340,7 @@ describe('Commercial engine', () => {
 
     it('Khalti: amount mismatch in lookup is never accepted', async () => {
       await db.sys.Subscription.update({ currentPeriodEnd: new Date(Date.now() + 2 * DAY), paymentStatus: 'PENDING' }, { where: { id: T.subscriptionId } });
-      const inv = (await as('wallet', tok).post('/billing/checkout').send({ planCode: 'STANDARD', billingCycle: 'MONTHLY' })).body.data.invoice;
+      const inv = (await as('wallet', tok).post('/billing/checkout').send({ planCode: 'PROFESSIONAL', billingCycle: 'MONTHLY' })).body.data.invoice;
       mockProviders({
         'epayment/initiate': { status: 200, json: { pidx: 'PIDX999', payment_url: 'https://test-pay.khalti.com/?pidx=PIDX999' } },
         'epayment/lookup': { status: 200, json: { pidx: 'PIDX999', status: 'Completed', total_amount: 100, transaction_id: 'KH-CHEAP' } },
@@ -413,7 +413,7 @@ describe('Commercial engine', () => {
       assert.equal(d.kpis.arr, Math.round(d.kpis.mrr * 1200) / 100);
       assert.ok(d.kpis.leads >= 2);
       assert.ok(d.charts.revenueByMonth.length >= 1);
-      assert.ok(d.charts.planDistribution.some((p) => p.code === 'STANDARD'));
+      assert.ok(d.charts.planDistribution.some((p) => p.code === 'PROFESSIONAL'));
       assert.ok(d.recentTenants.length > 0);
     });
     it('VAT rate is a validated platform setting used by new quotes', async () => {

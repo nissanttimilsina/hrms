@@ -32,7 +32,7 @@ export function Reports() {
   return (
     <>
       <PageHeader title="Reports" description="Figures cover only the people you're allowed to see."
-        actions={a.can('reports:export') && r && (catalog?.canExport ? <><Button variant="secondary" onClick={() => exportAs('csv')}>Export CSV</Button><Button variant="secondary" onClick={() => exportAs('xlsx')}>Export Excel</Button></> : <span className="text-sm text-ink-500">Excel/CSV export is included from the Standard plan.</span>)} />
+        actions={a.can('reports:export') && r && (catalog?.canExport ? <><Button variant="secondary" onClick={() => exportAs('csv')}>Export CSV</Button><Button variant="secondary" onClick={() => exportAs('xlsx')}>Export Excel</Button></> : <span className="text-sm text-ink-500">Excel/CSV export is included from the Professional plan.</span>)} />
       <div className="mb-4 flex flex-wrap gap-1 border-b border-line">
         {available.map((x) => <button key={x.key} type="button" onClick={() => setKey(x.key)} className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${key === x.key ? 'border-brand-600 text-brand-700' : 'border-transparent text-ink-500'}`}>{x.name}</button>)}
       </div>

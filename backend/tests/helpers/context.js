@@ -31,7 +31,7 @@ export async function resetDatabase() {
 export const app = createApp();
 export const api = () => request(app);
 
-export async function makeTenant(slug, planCode = 'STANDARD', { trial = true } = {}) {
+export async function makeTenant(slug, planCode = 'PROFESSIONAL', { trial = true } = {}) {
   const r = await provisionTenant({
     slug, name: `${slug} Pvt. Ltd.`, planCode, trial,
     owner: { email: `owner@${slug}.test`, fullName: `${slug} Owner`, password: PASSWORD },

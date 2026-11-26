@@ -9,7 +9,7 @@ describe('Reports & document expiry alerts', () => {
   const today = localDate();
   before(async () => {
     await resetDatabase();
-    T = await makeTenant('reportco', 'STANDARD');
+    T = await makeTenant('reportco', 'PROFESSIONAL');
     owner = as('reportco', (await login('reportco', T.ownerEmail)).token);
     deptA = (await owner.post('/departments').send({ code: 'SAL', name: 'Sales' })).body.data;
     deptB = (await owner.post('/departments').send({ code: 'FIN', name: 'Finance' })).body.data;
@@ -106,7 +106,7 @@ describe('Reports & document expiry alerts', () => {
   });
 
   it('reports stay inside the tenant', async () => {
-    await makeTenant('otherco', 'STANDARD');
+    await makeTenant('otherco', 'PROFESSIONAL');
     const other = as('otherco', (await login('otherco', 'owner@otherco.test')).token);
     const r = await other.get('/reports/headcount');
     assert.equal(Object.fromEntries(r.body.data.summary)['Headcount at end'], 0);

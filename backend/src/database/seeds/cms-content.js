@@ -17,7 +17,7 @@ export const CMS_DEFAULTS = [
   faq('mobile', 'Can employees use it on their phones?', 'Yes. The employee self-service portal works on any phone and can be installed like an app. Employees can clock in and out, apply for leave, download payslips and see announcements.', 'Product'),
   faq('data-security', 'Is our data secure and private?', 'Each company\'s data is isolated at the database level, all traffic is encrypted with HTTPS, passwords are hashed with Argon2id, and every sensitive action is recorded in an audit log. See our Security page for details.', 'Security'),
   faq('data-ownership', 'Who owns our data? Can we export it?', 'You do. Administrators can export employee, attendance, leave and payroll data at any time. If you leave, we keep your data available for export for a retention period before deletion, as described in our Terms.', 'Security'),
-  faq('migration', 'Can you help us move from spreadsheets or another system?', 'Yes. You can bulk-import employees from Excel/CSV, and our team assists Premium and Enterprise customers with data migration.', 'Onboarding'),
+  faq('migration', 'Can you help us move from spreadsheets or another system?', 'Yes. You can bulk-import employees from Excel/CSV, and our team assists Business and Enterprise customers with data migration.', 'Onboarding'),
   faq('custom-needs', 'We have special requirements. Can you customise it?', 'Many requirements are covered by configuration: custom fields, approval workflows, leave policies, shifts and roles. For larger needs, our Enterprise plan includes custom modules, integrations and dedicated deployments.', 'Onboarding'),
 
   {

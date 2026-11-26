@@ -13,7 +13,7 @@ export const PLATFORM_DEFAULTS = {
   'support.sla_hours': { URGENT: 2, HIGH: 8, NORMAL: 24, LOW: 48 },
   'platform.maintenance': { enabled: false, message: '' },
   'signup.enabled': true,
-  'signup.default_plan': 'STANDARD',
+  'signup.default_plan': 'PROFESSIONAL',
 };
 
 export async function getSetting(key) {

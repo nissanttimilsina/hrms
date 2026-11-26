@@ -43,9 +43,9 @@ export const FEATURES = [
 
 // --------------------------------------------------------------------------- plans (initial defaults)
 const BASIC = ['attendance', 'leave'];
-const STANDARD = [...BASIC, 'payroll', 'shifts', 'recruitment', 'expenses', 'performance',
+const PROFESSIONAL = [...BASIC, 'payroll', 'shifts', 'recruitment', 'expenses', 'performance',
   'reports_advanced', 'document_expiry_alerts', 'workflows', 'onboarding'];
-const PREMIUM = [...STANDARD, 'payroll_advanced', 'kpi_appraisal', 'training', 'assets',
+const BUSINESS = [...PROFESSIONAL, 'payroll_advanced', 'kpi_appraisal', 'training', 'assets',
   'analytics_advanced', 'multi_branch', 'custom_fields', 'workflows_advanced', 'api_integrations', 'helpdesk'];
 const ENTERPRISE = FEATURES.filter((f) => !f[3]).map((f) => f[0]);
 
@@ -53,11 +53,11 @@ export const PLANS = [
   { code: 'BASIC', name: 'Basic', sortOrder: 1, maxEmployees: 20, maxBranches: 1, maxStorageMb: 2048,
     monthly: 1499, annual: 14990, features: BASIC,
     highlights: ['Up to 20 employees', '1 branch', 'Attendance & leave', 'Employee self-service', 'Basic reports'] },
-  { code: 'STANDARD', name: 'Standard', sortOrder: 2, maxEmployees: 50, maxBranches: 2, maxStorageMb: 10240,
-    monthly: 2999, annual: 29990, features: STANDARD,
+  { code: 'PROFESSIONAL', name: 'Professional', sortOrder: 2, maxEmployees: 50, maxBranches: 2, maxStorageMb: 10240,
+    monthly: 2999, annual: 29990, features: PROFESSIONAL,
     highlights: ['Up to 50 employees', '2 branches', 'Payroll', 'Shift scheduling', 'Recruitment', 'Custom approval workflows'] },
-  { code: 'PREMIUM', name: 'Premium', sortOrder: 3, maxEmployees: 150, maxBranches: 5, maxStorageMb: 51200,
-    monthly: 5999, annual: 59990, features: PREMIUM,
+  { code: 'BUSINESS', name: 'Business', sortOrder: 3, maxEmployees: 150, maxBranches: 5, maxStorageMb: 51200,
+    monthly: 5999, annual: 59990, features: BUSINESS,
     highlights: ['Up to 150 employees', '5 branches', 'Advanced payroll', 'KPI & appraisal', 'Advanced analytics', 'API integrations'] },
   { code: 'ENTERPRISE', name: 'Enterprise', sortOrder: 4, maxEmployees: null, maxBranches: null, maxStorageMb: null,
     monthly: null, annual: null, features: ENTERPRISE, isCustom: true, contactSales: true, trialDays: 0,

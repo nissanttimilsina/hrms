@@ -123,7 +123,7 @@ export function Tenants() {
           { key: 'createdAt', header: 'Created', render: (r) => dt(r.createdAt) },
         ]} />
       <FormDialog open={create} onClose={() => setCreate(false)} title="Create company" description="Provisions the workspace, default roles and subscription. Leave password empty to email an invitation." loading={add.isPending} error={add.error}
-        initial={{ billingCycle: 'MONTHLY', trial: true, planCode: 'STANDARD' }}
+        initial={{ billingCycle: 'MONTHLY', trial: true, planCode: 'PROFESSIONAL' }}
         fields={[
           { name: 'name', label: 'Company name', required: true }, { name: 'slug', label: 'Workspace (subdomain)', required: true },
           { name: 'legalName', label: 'Legal name' }, { name: 'industry', label: 'Industry' },

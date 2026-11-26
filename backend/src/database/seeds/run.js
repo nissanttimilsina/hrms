@@ -125,7 +125,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       const exists = await db.sys.Tenant.findOne({ where: { slug: 'demo' } });
       if (!exists) {
         await provisionTenant({
-          slug: 'demo', name: 'Demo Company Pvt. Ltd.', planCode: 'STANDARD', billingCycle: 'MONTHLY',
+          slug: 'demo', name: 'Demo Company Pvt. Ltd.', planCode: 'PROFESSIONAL', billingCycle: 'MONTHLY',
           owner: { email: 'owner@demo.local', fullName: 'Demo Owner', password: process.env.SEED_DEMO_PASSWORD || 'ChangeMe!2026' },
           actor: { type: 'SYSTEM' },
         });

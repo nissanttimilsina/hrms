@@ -113,7 +113,7 @@ publicRouter.post('/signup', formLimiter, validate({
     industry: z.string().trim().max(80).optional(), employeeCount: z.number().int().min(1).max(1_000_000).optional(),
     fullName: z.string().trim().min(2).max(120), email: z.string().trim().toLowerCase().email().max(254),
     phone: z.string().trim().regex(/^\+?[0-9 -]{7,20}$/, 'Enter a valid phone number'), password: passwordPolicy,
-    planCode: z.string().trim().toUpperCase().default('STANDARD'), billingCycle: CYCLE.default('MONTHLY'),
+    planCode: z.string().trim().toUpperCase().default('PROFESSIONAL'), billingCycle: CYCLE.default('MONTHLY'),
     acceptTerms: z.literal(true, { message: 'You must accept the terms of service' }), utm, ...honeypot,
   }).strict(),
 }), asyncHandler(async (req, res) => {
