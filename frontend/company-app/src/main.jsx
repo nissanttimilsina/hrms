@@ -3,13 +3,14 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppShell, ToastProvider, Skeleton, Button, SubscriptionBanner, BrandProvider } from '@hrms/shared-ui';
-import { LayoutDashboard, Users, Building2, Clock, CalendarDays, Wallet, Megaphone, ShieldCheck, CreditCard, LifeBuoy, Settings as Cog, Bell, UserRound, ScrollText } from 'lucide-react';
+import { LayoutDashboard, Users, Building2, Clock, CalendarDays, Wallet, Megaphone, ShieldCheck, CreditCard, LifeBuoy, Settings as Cog, Bell, UserRound, ScrollText, BarChart3 } from 'lucide-react';
 import { AuthProvider, useAuth, api, dt } from './lib.jsx';
 import { Login, AcceptInvite, ForgotPassword, ResetPassword } from './pages/Auth.jsx';
 import { Dashboard } from './pages/Home.jsx';
 import { Employees, EmployeeProfile, Organization } from './pages/People.jsx';
 import { MyAttendance, AttendanceRegister, MyLeave, LeaveApprovals, LeaveSetup } from './pages/Time.jsx';
 import { PayrollRuns, PayrollRunDetail, PayrollSetup, MyPayslips } from './pages/Pay.jsx';
+import { Reports } from './pages/Reports.jsx';
 import { Access, Announcements, Billing, Support, SupportTicket, Settings, Audit, MyProfile } from './pages/Admin.jsx';
 import './styles.css';
 
@@ -36,6 +37,7 @@ function buildNav(a) {
       wide('payroll:view') && { key: '/payroll', label: 'Payroll', icon: I(Wallet), locked: !f('payroll') },
     ] },
     { label: 'Company', items: [
+      can('reports:view') && { key: '/reports', label: 'Reports', icon: I(BarChart3) },
       can('announcements:view') && { key: '/announcements', label: 'Announcements', icon: I(Megaphone) },
       can('roles:view') && { key: '/access', label: 'Users & roles', icon: I(ShieldCheck) },
       can('subscription:view') && { key: '/billing', label: 'Subscription', icon: I(CreditCard) },
@@ -132,6 +134,7 @@ function Shell() {
             <Route path="/support/:id" element={<SupportTicket />} />
             <Route path="/settings" element={<Settings />} />
             <Route path="/audit" element={<Audit />} />
+            <Route path="/reports" element={<Reports />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>

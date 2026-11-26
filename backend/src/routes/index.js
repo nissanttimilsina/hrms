@@ -14,6 +14,7 @@ import { attendanceRouter } from '../modules/attendance/attendance.routes.js';
 import { leaveRouter } from '../modules/leave/leave.routes.js';
 import { workspaceRouter } from '../modules/workspace/workspace.routes.js';
 import { payrollRouter } from '../modules/payroll/payroll.routes.js';
+import { reportsRouter } from '../modules/reports/reports.routes.js';
 
 /**
  * /api/v1 route map.
@@ -49,6 +50,7 @@ export function apiRouter() {
   tenant.use('/attendance', attendanceRouter);
   tenant.use('/leave', leaveRouter);
   tenant.use('/payroll', payrollRouter);
+  tenant.use('/reports', reportsRouter);
   tenant.use('/', workspaceRouter); // /dashboard, /announcements, /notifications, /settings
   r.use(tenant);
 

@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Card, CardBody, CardHeader, DataTable, Skeleton, Badge, EmptyState, Field, Input, useToast, ConfirmDialog } from '@hrms/shared-ui';
 import { api, useAuth, useList, useAction, FormDialog, PageHeader, StatusBadge, Filters, KV, npr, dt, fullName } from '../lib.jsx';
 
-const useOrg = () => {
+export const useOrg = () => {
   const b = useQuery({ queryKey: ['branches'], queryFn: () => api.get('/branches?pageSize=100&sort=name&order=asc') });
   const d = useQuery({ queryKey: ['departments'], queryFn: () => api.get('/departments?pageSize=100&sort=name&order=asc') });
   const g = useQuery({ queryKey: ['designations'], queryFn: () => api.get('/designations') });

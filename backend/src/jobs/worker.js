@@ -1,6 +1,7 @@
 /**
  * Background worker process (run separately from the API: `npm run worker`).
  *  - subscriptions: repeatable lifecycle sweep (expiry -> grace -> read-only)
+ *  - documents: daily expiry reminders (08:05 Kathmandu)
  *  - notifications: email delivery with retries; delivery is logged
  */
 import { Worker } from 'bullmq';
@@ -12,6 +13,7 @@ import { sys, closeDatabase } from '../database/index.js';
 import { sendEmail } from '../services/email.service.js';
 import { verifyProviderPayment, createRenewalInvoices } from '../services/billing.service.js';
 import { Op } from 'sequelize';
+import { documentExpiryAlerts } from '../services/hr/document-alerts.js';
 
 if (!env.REDIS_URL) {
   logger.fatal('REDIS_URL is required for the worker');
@@ -40,6 +42,7 @@ const subscriptionWorker = new Worker(QUEUES.SUBSCRIPTIONS, async (job) => {
     return { checked: stale.length, paid };
   }
   if (job.name === 'renewal-invoices') return { created: await createRenewalInvoices(7) };
+  if (job.name === 'document-expiry') return documentExpiryAlerts();
   if (job.name !== 'lifecycle-sweep') return;
   const changes = await sweepSubscriptions(new Date());
   for (const c of changes) {
@@ -63,6 +66,7 @@ const subsQ = getQueue(QUEUES.SUBSCRIPTIONS);
 await subsQ.upsertJobScheduler('lifecycle-sweep', { every: 15 * 60_000 }, { name: 'lifecycle-sweep' });
 await subsQ.upsertJobScheduler('payment-reconcile', { every: 10 * 60_000 }, { name: 'payment-reconcile' });
 await subsQ.upsertJobScheduler('renewal-invoices', { pattern: '15 2 * * *', tz: 'Asia/Kathmandu' }, { name: 'renewal-invoices' });
+await subsQ.upsertJobScheduler('document-expiry', { pattern: '5 8 * * *', tz: 'Asia/Kathmandu' }, { name: 'document-expiry' });
 logger.info('worker started');
 
 async function shutdown() {

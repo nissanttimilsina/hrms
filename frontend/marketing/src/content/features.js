@@ -119,10 +119,10 @@ export const FEATURES = [
   {
     slug: 'hr-analytics', key: 'reports', icon: 'BarChart3', category: 'Platform', status: 'available',
     name: 'HR Analytics & Reports', tagline: 'Decisions backed by your own data.',
-    overview: 'Dashboards for headcount, turnover, attendance, leave and payroll, with filters by branch, department and date. Export to Excel, CSV or PDF, or schedule reports by email.',
+    overview: 'Dashboards for headcount, turnover, attendance, leave and payroll, with filters by branch, department and date. Export any report to Excel or CSV.',
     benefits: ['Spot attendance and turnover issues early', 'Board-ready reports in minutes', 'One source of truth', 'Role-based visibility'],
-    capabilities: ['Role-based dashboards', 'Headcount and turnover', 'Attendance and overtime trends', 'Leave utilisation', 'Payroll cost reports', 'Excel, CSV and PDF export', 'Scheduled reports', 'Branch and department filters'],
-    workflow: ['Pick a report', 'Filter', 'Export or schedule', 'Act on insights'],
+    capabilities: ['Role-based dashboards', 'Headcount and turnover', 'Attendance and overtime trends', 'Leave utilisation', 'Payroll cost reports', 'Excel and CSV export', 'Exports recorded in the audit log', 'Branch and department filters'],
+    workflow: ['Pick a report', 'Filter', 'Export to Excel or CSV', 'Act on insights'],
     related: ['workforce-planning', 'payroll-management'],
   },
   {
@@ -139,7 +139,7 @@ export const FEATURES = [
     name: 'Document Management', tagline: 'Contracts and certificates, secure and searchable.',
     overview: 'Store contracts, IDs, certificates and policies against each employee, with private storage, permission checks and expiry reminders.',
     benefits: ['No more filing cabinets', 'Expiry reminders before it’s too late', 'Private and permission-checked', 'Ready for audits'],
-    capabilities: ['Per-employee document vault', 'Company policy library', 'Expiry tracking and alerts', 'Private links only, never public URLs', 'Upload validation and scanning', 'Access audit'],
+    capabilities: ['Per-employee document vault', 'Expiry dates with 30-day, 7-day and same-day reminders', 'Private links only, never public URLs', 'File-type validation on upload', 'Access audit'],
     workflow: ['Upload', 'Tag and set expiry', 'Get reminders', 'Share securely'],
     related: ['employee-management', 'onboarding-offboarding'],
   },
