@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends tini curl && rm
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json openapi.yaml ./
 COPY src ./src
+RUN mkdir -p /app/storage && chown node:node /app/storage
 USER node
 EXPOSE 4000
 HEALTHCHECK --interval=15s --timeout=3s --start-period=20s --retries=3 \

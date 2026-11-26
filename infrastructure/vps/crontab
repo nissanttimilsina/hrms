@@ -1,0 +1,11 @@
+# Install:  sudo cp /opt/hrms/infrastructure/vps/crontab /etc/cron.d/hrms
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+# Nightly encrypted backup at 01:30 (server time = Asia/Kathmandu)
+30 1 * * *   root  /opt/hrms/infrastructure/vps/backup.sh >> /var/log/hrms-backup.log 2>&1
+# Weekly restore drill, Sunday 03:00
+0 3 * * 0    root  /opt/hrms/infrastructure/vps/restore-drill.sh >> /var/log/hrms-backup.log 2>&1
+# Certificate renewal check twice a month (Cloudflare DNS mode); re-installs and reloads Nginx when renewed
+0 4 1,15 * * root  set -a; . /etc/hrms/cert.env; /opt/hrms/infrastructure/vps/issue-cert.sh >> /var/log/hrms-cert.log 2>&1
+# Docker cleanup of old images, monthly
+0 5 1 * *    root  docker image prune -af --filter "until=720h" >/dev/null

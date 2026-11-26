@@ -27,9 +27,10 @@ const schema = z.object({
 
   // Domains
   ROOT_DOMAIN: z.string().default('yourhrms.com'), // tenants get <slug>.<ROOT_DOMAIN>
-  APP_HOST: z.string().default('app.yourhrms.com'), // generic company-app host
-  ADMIN_HOST: z.string().default('admin.yourhrms.com'),
-  MARKETING_HOST: z.string().default('www.yourhrms.com'),
+  // The hosts and URLs below default to app./admin./www.<ROOT_DOMAIN>; set them only to override.
+  APP_HOST: z.string().optional(), // generic company-app host
+  ADMIN_HOST: z.string().optional(),
+  MARKETING_HOST: z.string().optional(),
   CORS_ORIGINS: z.string().default(''), // comma-separated exact origins
   TRUST_PROXY: z.coerce.number().int().min(0).default(1), // hops (nginx = 1)
   COOKIE_SECURE: bool(true),
@@ -42,9 +43,9 @@ const schema = z.object({
   ENABLE_API_DOCS: bool(true),
 
   // Public URLs (used in emails, payment return URLs)
-  APP_URL: z.string().url().default('https://app.yourhrms.com'),
-  MARKETING_URL: z.string().url().default('https://www.yourhrms.com'),
-  ADMIN_URL: z.string().url().default('https://admin.yourhrms.com'),
+  APP_URL: z.string().url().optional(),
+  MARKETING_URL: z.string().url().optional(),
+  ADMIN_URL: z.string().url().optional(),
 
   // Email (SMTP). EMAIL_TRANSPORT=log prints instead of sending (development).
   EMAIL_TRANSPORT: z.enum(['log', 'smtp']).default('log'),
@@ -87,6 +88,12 @@ if (!parsed.success) {
   process.exit(1);
 }
 
+{
+  const d = parsed.data; const root = d.ROOT_DOMAIN.toLowerCase();
+  d.APP_HOST ??= `app.${root}`; d.ADMIN_HOST ??= `admin.${root}`; d.MARKETING_HOST ??= `www.${root}`;
+  d.APP_URL ??= `https://${d.APP_HOST}`; d.ADMIN_URL ??= `https://${d.ADMIN_HOST}`; d.MARKETING_URL ??= `https://${d.MARKETING_HOST}`;
+}
+
 if (parsed.data.NODE_ENV === 'production') {
   const enabled = parsed.data.PAYMENTS_ENABLED.toUpperCase();
   const problems = [];
@@ -108,5 +115,6 @@ export const env = Object.freeze({
   isProd: parsed.data.NODE_ENV === 'production',
   isTest: parsed.data.NODE_ENV === 'test',
   paymentProviders: parsed.data.PAYMENTS_ENABLED.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean),
+  // Same-origin requests need no CORS; this list is only for extra origins (e.g. a staging frontend).
   corsOrigins: parsed.data.CORS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean),
 });
