@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Card, CardBody, CardHeader, DataTable, Skeleton, Stat, Badge, EmptyState, Dialog } from '@hrms/shared-ui';
+import { Button, Card, CardBody, CardHeader, DataTable, Skeleton, Stat, Badge, EmptyState, Dialog, Select } from '@hrms/shared-ui';
 import { api, useAuth, useAction, FormDialog, PageHeader, StatusBadge, npr, dt, fullName } from '../lib.jsx';
 
 const BS_MONTHS = ['Baisakh', 'Jestha', 'Asar', 'Shrawan', 'Bhadra', 'Asoj', 'Kartik', 'Mangsir', 'Poush', 'Magh', 'Falgun', 'Chaitra'];
 const label = (p) => { const [y, m] = p.split('-').map(Number); return `${BS_MONTHS[m - 1]} ${y}`; };
+
+const ADJ_TYPES = [['BONUS', 'Bonus'], ['INCENTIVE', 'Incentive'], ['ARREARS', 'Arrears'], ['REIMBURSEMENT', 'Reimbursement'], ['FINE', 'Fine (deduction)'], ['OTHER', 'Other']];
 
 export function PayrollRuns() {
   const a = useAuth();
@@ -92,6 +94,7 @@ export function PayrollRunDetail() {
       {item && (
         <Dialog open onClose={() => setItem(null)} title={`${fullName(item.employee)} · ${run.label}`} size="lg" footer={<Button variant="secondary" onClick={() => api.download(`/payroll/payslips/${item.id}/pdf`, `payslip-${run.period}.pdf`)}>Download payslip</Button>}>
           {item.anomalies.length > 0 && <ul className="mb-3 rounded-md bg-warning-50 p-3 text-sm text-warning-700">{item.anomalies.map((x) => <li key={x}>• {x}</li>)}</ul>}
+          <p className="mb-3 text-xs text-ink-500">Attendance: {item.attendance.present ?? 0} present · {item.attendance.late ?? 0} late · {item.attendance.absent ?? 0} absent · {item.attendance.paidLeave ?? 0} paid leave · {item.attendance.unpaidLeave ?? 0} unpaid leave · {((item.attendance.overtimeMinutes ?? 0) / 60).toFixed(1)} h overtime</p>
           <div className="grid gap-4 text-sm sm:grid-cols-2">
             {['EARNING', 'DEDUCTION'].map((k) => <div key={k}><p className="mb-1 text-xs font-semibold uppercase text-ink-400">{k === 'EARNING' ? 'Earnings' : 'Deductions'}</p>{item.lines.filter((l) => l.kind === k).map((l, i) => <p key={i} className="flex justify-between"><span>{l.name}</span><span className="tabular-nums">{npr(l.amount)}</span></p>)}</div>)}
           </div>
@@ -110,8 +113,9 @@ export function PayrollRunDetail() {
       <FormDialog open={dlg === 'reject'} onClose={() => setDlg(null)} title="Return payroll" fields={[{ name: 'reason', label: 'What needs fixing?', type: 'textarea', required: true }]} submitLabel="Return" loading={reject.isPending} error={reject.error} onSubmit={(b) => reject.mutate(b)} />
       <FormDialog open={dlg === 'paid'} onClose={() => setDlg(null)} title="Mark payroll as paid" fields={[{ name: 'paymentRef', label: 'Bank batch / reference', required: true }]} loading={paid.isPending} error={paid.error} onSubmit={(b) => paid.mutate(b)} />
       <FormDialog open={dlg === 'void'} onClose={() => setDlg(null)} title="Void payroll" description="Use this if the run was created for the wrong month." fields={[{ name: 'reason', label: 'Reason', type: 'textarea', required: true }]} submitLabel="Void" loading={voidR.isPending} error={voidR.error} onSubmit={(b) => voidR.mutate(b)} />
-      <FormDialog open={dlg === 'adj'} onClose={() => setDlg(null)} title="One-off adjustment" description="Bonus, arrears, recovery, etc. for this month only." initial={{ kind: 'EARNING', taxable: true }}
-        fields={[{ name: 'employeeId', label: 'Employee', type: 'select', required: true, options: items.map((i) => ({ value: i.employeeId, label: fullName(i.employee) })) }, { name: 'kind', label: 'Type', type: 'select', options: [{ value: 'EARNING', label: 'Earning' }, { value: 'DEDUCTION', label: 'Deduction' }] },
+      <FormDialog open={dlg === 'adj'} onClose={() => setDlg(null)} title="One-off pay item" description="Bonus, incentive, arrears, reimbursement or a deduction, for this month only." initial={{ code: 'BONUS', kind: 'EARNING', taxable: true }}
+        fields={[{ name: 'employeeId', label: 'Employee', type: 'select', required: true, options: items.map((i) => ({ value: i.employeeId, label: fullName(i.employee) })) },
+          { name: 'code', label: 'Kind', type: 'select', options: ADJ_TYPES.map(([v, l]) => ({ value: v, label: l })) }, { name: 'kind', label: 'Earning or deduction', type: 'select', options: [{ value: 'EARNING', label: 'Earning' }, { value: 'DEDUCTION', label: 'Deduction' }] },
           { name: 'description', label: 'Description', required: true }, { name: 'amount', label: 'Amount (NPR)', type: 'number', required: true }, { name: 'taxable', type: 'checkbox', checkLabel: 'Taxable' }]}
         loading={adj.isPending} error={adj.error} onSubmit={(b) => adj.mutate({ ...b, period: run.period, taxable: !!b.taxable })} />
     </>
@@ -130,6 +134,7 @@ export function PayrollSetup() {
         { key: 'code', header: 'Code' }, { key: 'name', header: 'Name' }, { key: 'kind', header: 'Type', render: (r) => r.kind.toLowerCase() },
         { key: 'taxable', header: 'Taxable', render: (r) => (r.taxable ? 'Yes' : 'No') }, { key: 'prorated', header: 'Reduced for unpaid days', render: (r) => (r.prorated ? 'Yes' : 'No') }, { key: 'isActive', header: 'Active', render: (r) => (r.isActive ? 'Yes' : 'No') },
       ]} />
+      <Loans />
       <Card className="mt-6"><CardHeader title="Statutory rules in use" description="Maintained by Lishnu HRMS from the Finance Act each year. Confirm with your tax advisor." /><CardBody className="space-y-3 text-sm">
         {(rules ?? []).map((r) => <div key={r.id}><p className="font-medium">FY {r.fiscalYear} <span className="font-normal text-ink-400">({dt(r.effectiveFrom)} – {dt(r.effectiveTo)})</span></p><p className="text-ink-500">{r.rules.slabs.SINGLE.map((s) => `${s.rate}%${s.upTo ? ` to ${npr(s.upTo)}` : ' above'}`).join(' · ')} · SSF {r.rules.ssf.employeePercent}% + {r.rules.ssf.employerPercent}%</p><p className="text-xs text-ink-400">{r.sourceNote}</p></div>)}
       </CardBody></Card>
@@ -141,11 +146,51 @@ export function PayrollSetup() {
   );
 }
 
+function Loans() {
+  const a = useAuth();
+  const [status, setStatus] = useState('ACTIVE');
+  const { data, isPending, refetch } = useQuery({ queryKey: ['loans', status], queryFn: () => api.get(`/payroll/loans?status=${status}`) });
+  const [dlg, setDlg] = useState(null);
+  const [q, setQ] = useState('');
+  const { data: emps } = useQuery({ queryKey: ['emp-search-loan', q], queryFn: () => api.get(`/employees?pageSize=50&search=${encodeURIComponent(q)}`), enabled: dlg === 'new' });
+  const create = useAction((b) => api.post('/payroll/loans', b), { success: 'Recorded; instalments are deducted from payroll', onDone: () => { setDlg(null); refetch(); } });
+  const cancel = useAction(({ id, reason }) => api.post(`/payroll/loans/${id}/cancel`, { reason }), { success: 'Cancelled', onDone: () => { setDlg(null); refetch(); } });
+  return (
+    <Card className="mt-6"><CardHeader title="Salary advances & loans" description="Recovered automatically from each payroll in monthly instalments (never below zero net pay)."
+      actions={<div className="flex gap-2"><div className="w-36"><Select value={status} onChange={(e) => setStatus(e.target.value)} options={[{ value: 'ACTIVE', label: 'Active' }, { value: 'CLOSED', label: 'Closed' }, { value: 'CANCELLED', label: 'Cancelled' }]} aria-label="Status" /></div>{a.can('payroll:create') && <Button size="sm" onClick={() => setDlg('new')}>New advance / loan</Button>}</div>} />
+      <CardBody>
+        <DataTable loading={isPending} rows={data ?? []} empty={<EmptyState title="Nothing here" />} columns={[
+          { key: 'employee', header: 'Employee', render: (r) => fullName(r.employee) }, { key: 'title', header: 'For', render: (r) => <>{r.title} <Badge tone="neutral">{r.kind.toLowerCase()}</Badge></> },
+          { key: 'principal', header: 'Amount', align: 'right', render: (r) => npr(r.principal) }, { key: 'installmentAmount', header: 'Per month', align: 'right', render: (r) => npr(r.installmentAmount) },
+          { key: 'startPeriod', header: 'From' }, { key: 'recovered', header: 'Recovered', align: 'right', render: (r) => npr(r.recovered) }, { key: 'balance', header: 'Balance', align: 'right', render: (r) => <strong>{npr(r.balance)}</strong> },
+          { key: 'x', header: '', render: (r) => r.status === 'ACTIVE' && a.can('payroll:edit') && <Button size="sm" variant="ghost" onClick={() => setDlg(r)}>Cancel</Button> },
+        ]} />
+      </CardBody>
+      {dlg === 'new' && (
+        <FormDialog open onClose={() => setDlg(null)} title="New salary advance or loan" initial={{ kind: 'ADVANCE' }}
+          fields={[
+            { name: 'search', label: 'Find employee', hint: 'Type a name, then pick below' },
+            { name: 'employeeId', label: 'Employee', type: 'select', required: true, options: (emps ?? []).map((e) => ({ value: e.id, label: `${fullName(e)} (${e.employeeCode})` })) },
+            { name: 'kind', label: 'Type', type: 'select', options: [{ value: 'ADVANCE', label: 'Salary advance' }, { value: 'LOAN', label: 'Loan' }] }, { name: 'title', label: 'Purpose', required: true },
+            { name: 'principal', label: 'Amount (NPR)', type: 'number', required: true }, { name: 'installmentAmount', label: 'Monthly instalment (NPR)', type: 'number', required: true },
+            { name: 'startPeriod', label: 'First recovery month (BS, e.g. 2083-08)', required: true }, { name: 'note', label: 'Note', type: 'textarea', rows: 2 },
+          ]}
+          loading={create.isPending} error={create.error}
+          onChange={(v) => { if (v.search !== undefined && v.search !== q) setQ(v.search); }}
+          onSubmit={({ search, ...b }) => create.mutate(b)} />
+      )}
+      {dlg && dlg !== 'new' && <FormDialog open onClose={() => setDlg(null)} title={`Cancel ${dlg.title}?`} description={`Remaining balance NPR ${dlg.balance} will no longer be deducted.`} fields={[{ name: 'reason', label: 'Reason', required: true }]} submitLabel="Cancel recovery" loading={cancel.isPending} error={cancel.error} onSubmit={(b) => cancel.mutate({ id: dlg.id, ...b })} />}
+    </Card>
+  );
+}
+
 export function MyPayslips() {
   const { data, isPending } = useQuery({ queryKey: ['my-payslips'], queryFn: () => api.get('/payroll/payslips/me') });
+  const { data: loans } = useQuery({ queryKey: ['my-loans'], queryFn: () => api.get('/payroll/loans/me') });
   return (
     <>
       <PageHeader title="My payslips" />
+      {(loans ?? []).filter((l) => l.status === 'ACTIVE').map((l) => <Card key={l.id} className="mb-3"><CardBody className="text-sm"><strong>{l.title}</strong>: {npr(l.balance)} still to repay at {npr(l.installmentAmount)} per month.</CardBody></Card>)}
       {isPending ? <Skeleton className="h-40" /> : !data.length ? <EmptyState title="No payslips yet" description="Payslips appear here once payroll is approved and published." /> : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {data.map((p) => (

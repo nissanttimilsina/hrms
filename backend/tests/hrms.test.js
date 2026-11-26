@@ -35,7 +35,7 @@ describe('Core HRMS', () => {
   describe('provisioning defaults', () => {
     it('creates Labour-Act leave types and a default shift', async () => {
       const types = (await owner.get('/leave/types')).body.data.map((x) => x.code).sort();
-      assert.deepEqual(types, ['HOME', 'MATERNITY', 'MATERNITY_EXT', 'MOURNING', 'PATERNITY', 'SICK', 'UNPAID']);
+      assert.deepEqual(types, ['CASUAL', 'HOME', 'MATERNITY', 'MATERNITY_EXT', 'MOURNING', 'PATERNITY', 'SICK', 'UNPAID']);
       const shifts = (await owner.get('/shifts')).body.data;
       assert.equal(shifts.filter((s) => s.isDefault).length, 1);
     });

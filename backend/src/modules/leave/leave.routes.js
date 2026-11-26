@@ -7,7 +7,7 @@ import { validate } from '../../middleware/common.js';
 import { recordInScope } from '../../services/rbac.service.js';
 import { audit, tenantActor } from '../../services/audit.service.js';
 import { localDate, fiscalYear, fiscalYearRange, eachDate, weekday, toBS, fromBS, addDays } from '../../services/hr/calendar.js';
-import { getPolicy, scheduleFor, scopedEmployeeIds } from '../../services/hr/attendance.js';
+import { getPolicy, loadCalendar, scopedEmployeeIds } from '../../services/hr/attendance.js';
 import { notifyUsers, usersWithPermission, userIdForEmployee } from '../../services/hr/notify.js';
 import { asyncHandler, ok, created } from '../../utils/http.js';
 import { BadRequest, Conflict, Forbidden, NotFound } from '../../utils/errors.js';
@@ -25,6 +25,8 @@ export const DEFAULT_LEAVE_TYPES = [
   { code: 'PATERNITY', name: 'Paternity leave', annualQuota: 15, accrual: 'YEARLY', appliesToGender: 'MALE', allowHalfDay: false },
   { code: 'MOURNING', name: 'Mourning leave', annualQuota: 13, accrual: 'YEARLY', allowHalfDay: false },
   { code: 'UNPAID', name: 'Unpaid leave', annualQuota: 0, accrual: 'NONE', isPaid: false, allowNegative: true, approvalLevels: 2 },
+  // Not required by the Labour Act; included switched off for companies that grant it.
+  { code: 'CASUAL', name: 'Casual leave', annualQuota: 6, accrual: 'YEARLY', allowHalfDay: true, isActive: false },
 ];
 
 export const leaveRouter = Router();
@@ -91,11 +93,9 @@ export async function balances(t, emp, year, tz) {
 /** Working days in a range for this employee (excludes weekly offs and holidays). */
 async function countDays(t, emp, start, end, halfDay) {
   const policy = await getPolicy(t);
-  const sch = await scheduleFor(t, emp, policy);
-  const hols = new Set((await app.Holiday.findAll({ where: { date: { [Op.between]: [start, end] }, isOptional: false }, transaction: t }))
-    .filter((h) => !h.branchIds.length || h.branchIds.includes(emp.branchId)).map((h) => h.date));
+  const cal = await loadCalendar(t, { from: start, to: end, policy });
   let n = 0;
-  for (const d of eachDate(start, end)) if (!sch.weeklyOffs.includes(weekday(d)) && !hols.has(d)) n += 1;
+  for (const d of eachDate(start, end)) if (cal.dayType(emp, d).type === 'WORKING') n += 1;
   return halfDay ? Math.min(n, 0.5) : n;
 }
 
@@ -136,7 +136,7 @@ leaveRouter.get('/holidays', requirePermission('holidays:view'), validate({ quer
 }));
 leaveRouter.post('/holidays', requirePermission('holidays:create'), validate({
   body: z.union([
-    z.object({ date: DATE, name: z.string().trim().min(2).max(100), isOptional: z.boolean().default(false), branchIds: z.array(z.string().uuid()).default([]) }).strict(),
+    z.object({ date: DATE, name: z.string().trim().min(2).max(100), kind: z.enum(['HOLIDAY', 'WORKING_DAY']).default('HOLIDAY'), isOptional: z.boolean().default(false), branchIds: z.array(z.string().uuid()).default([]) }).strict(),
     z.object({ holidays: z.array(z.object({ date: DATE, name: z.string().trim().min(2).max(100), isOptional: z.boolean().default(false) }).strict()).min(1).max(100) }).strict(),
   ]),
 }), asyncHandler(async (req, res) => {
@@ -310,4 +310,44 @@ leaveRouter.get('/calendar', requirePermission('leave:view'), validate({ query: 
     });
   });
   return ok(res, rows);
+}));
+
+// --------------------------------------------------------------------------- encashment
+/**
+ * Pay out unused leave: debits the leave ledger and adds a taxable LEAVE_ENCASHMENT earning to the chosen payroll
+ * month. Default amount = days × (monthly basic salary ÷ 30); HR can enter the amount instead.
+ */
+leaveRouter.post('/encashments', requirePermission('leave:manage'), validate({
+  body: z.object({
+    employeeId: z.string().uuid(), leaveTypeId: z.string().uuid(), days: z.number().positive().max(366).multipleOf(0.5),
+    period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, 'Use BS year-month, e.g. 2083-08'), amount: z.number().positive().max(10_000_000).optional(),
+    note: z.string().trim().max(300).optional(), year: z.string().regex(/^\d{4}\/\d{2}$/).optional(),
+  }).strict(),
+}), asyncHandler(async (req, res) => {
+  if (!req.auth.grants.has('payroll:edit')) throw Forbidden('Encashment adds a payroll item: you also need payroll edit access', 'FORBIDDEN');
+  if (!req.auth.ctx.features.includes('payroll')) throw BadRequest('Leave encashment is paid through payroll, which is not in your plan');
+  const tz = req.auth.ctx.tenant.timezone;
+  const year = req.body.year ?? fiscalYear(localDate(new Date(), tz));
+  const out = await req.tx(async (t) => {
+    const emp = await app.Employee.findOne({ where: { id: req.body.employeeId, deletedAt: null }, transaction: t });
+    if (!emp || !recordInScope(req.scopes, req.auth.principal, emp)) throw NotFound('Employee');
+    const type = await app.LeaveType.findByPk(req.body.leaveTypeId, { transaction: t });
+    if (!type) throw NotFound('Leave type');
+    if (!type.encashable) throw BadRequest(`${type.name} cannot be encashed (change this in leave setup)`);
+    const bal = (await balances(t, emp, year, tz)).find((b) => b.leaveTypeId === type.id);
+    if (!bal || bal.available < req.body.days) throw BadRequest(`Only ${bal?.available ?? 0} day(s) of ${type.name} available`);
+    const locked = await app.PayrollRun.findOne({ where: { period: req.body.period, status: { [Op.in]: ['SUBMITTED', 'APPROVED', 'PAID'] } }, transaction: t });
+    if (locked) throw Conflict(`Payroll for ${req.body.period} is ${locked.status.toLowerCase()}. Choose the next month.`, 'PERIOD_LOCKED');
+    let amount = req.body.amount;
+    if (amount == null) {
+      const salary = await app.EmployeeSalary.findOne({ where: { employeeId: emp.id }, order: [['effectiveFrom', 'DESC']], transaction: t });
+      if (!salary) throw BadRequest('No salary is set for this employee: enter the amount');
+      amount = Math.round(Number(salary.basic) / 30 * req.body.days * 100) / 100;
+    }
+    const tx = await app.LeaveTransaction.create({ tenantId: req.auth.tenantId, employeeId: emp.id, leaveTypeId: type.id, leaveYear: year, kind: 'ENCASHMENT', days: -req.body.days, note: req.body.note ?? `Encashed in payroll ${req.body.period}`, actorId: req.auth.userId }, { transaction: t });
+    const adj = await app.PayrollAdjustment.create({ tenantId: req.auth.tenantId, employeeId: emp.id, period: req.body.period, kind: 'EARNING', code: 'LEAVE_ENCASHMENT', description: `Leave encashment: ${req.body.days} day(s) ${type.name}`, amount, taxable: true, createdBy: req.auth.userId }, { transaction: t });
+    await audit({ transaction: t, tenantId: req.auth.tenantId, actor: tenantActor(req), action: 'leave.encash', entityType: 'employee', entityId: emp.id, after: { ...req.body, amount, year }, req });
+    return { transaction: tx, adjustment: adj, amount };
+  });
+  return created(res, out);
 }));

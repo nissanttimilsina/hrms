@@ -65,7 +65,7 @@ export function defineModels(sequelize) {
 
   // ---------------------------------------------------------------- organisation
   const Branch = sequelize.define('Branch', {
-    id, tenantId, code: S, name: S, address: T, isHeadOffice: B, isActive: B, deletedAt: D,
+    id, tenantId, code: S, name: S, address: T, isHeadOffice: B, isActive: B, defaultShiftId: U, deletedAt: D,
   }, opts('branches'));
 
   const Department = sequelize.define('Department', {
@@ -191,7 +191,7 @@ export function defineModels(sequelize) {
   const Designation = sequelize.define('Designation', { id, tenantId, name: S, level: I, deletedAt: D }, opts('designations'));
   const Shift = sequelize.define('Shift', {
     id, tenantId, name: S, startTime: DataTypes.TIME, endTime: DataTypes.TIME, breakMinutes: I, graceMinutes: I,
-    weeklyOffs: DataTypes.ARRAY(DataTypes.TEXT), isDefault: B, deletedAt: D,
+    weeklyOffs: DataTypes.ARRAY(DataTypes.TEXT), dayHours: J, isDefault: B, deletedAt: D,
   }, opts('shifts'));
   const EmployeeHistory = sequelize.define('EmployeeHistory', {
     id, tenantId, employeeId: U, type: S, effectiveOn: DO, fromValue: J, toValue: J, note: T, actorId: U,
@@ -208,7 +208,7 @@ export function defineModels(sequelize) {
     id, tenantId, employeeId: U, workDate: DO, clockIn: D, clockOut: D, reason: T, status: S, requestedBy: U,
     reviewedBy: U, reviewedAt: D, reviewNote: T,
   }, createdOnly('attendance_corrections'));
-  const Holiday = sequelize.define('Holiday', { id, tenantId, date: DO, name: S, isOptional: B, branchIds: DataTypes.ARRAY(DataTypes.UUID) }, createdOnly('holidays'));
+  const Holiday = sequelize.define('Holiday', { id, tenantId, date: DO, name: S, kind: S, isOptional: B, branchIds: DataTypes.ARRAY(DataTypes.UUID) }, createdOnly('holidays'));
   const LeaveType = sequelize.define('LeaveType', {
     id, tenantId, code: S, name: S, isPaid: B, annualQuota: N, accrual: S, carryForwardMax: N, encashable: B,
     allowHalfDay: B, allowNegative: B, maxConsecutiveDays: I, minNoticeDays: I, approvalLevels: I, appliesToGender: S, isActive: B,
@@ -239,7 +239,7 @@ export function defineModels(sequelize) {
   const PayrollItem = sequelize.define('PayrollItem', {
     id, tenantId, runId: U, employeeId: U, lines: J, attendance: J, taxDetail: J, snapshot: J, gross: M, deductions: M, tax: M, ssfEmployee: M, ssfEmployer: M, net: M, anomalies: J,
   }, createdOnly('payroll_items'));
-  const PayrollAdjustment = sequelize.define('PayrollAdjustment', { id, tenantId, employeeId: U, period: S, kind: S, description: T, amount: M, taxable: B, createdBy: U }, createdOnly('payroll_adjustments'));
+  const PayrollAdjustment = sequelize.define('PayrollAdjustment', { id, tenantId, employeeId: U, period: S, kind: S, code: S, description: T, amount: M, taxable: B, createdBy: U }, createdOnly('payroll_adjustments'));
   PayrollItem.belongsTo(Employee, { foreignKey: 'employeeId', as: 'employee' });
   PayrollItem.belongsTo(PayrollRun, { foreignKey: 'runId', as: 'run' });
   PayrollRun.hasMany(PayrollItem, { foreignKey: 'runId', as: 'items' });
@@ -292,6 +292,11 @@ export function defineModels(sequelize) {
   DevicePunch.belongsTo(AttendanceDevice, { foreignKey: 'deviceId', as: 'device' });
   AttendanceDevice.belongsTo(Branch, { foreignKey: 'branchId', as: 'branch' });
 
+  const EmployeeLoan = sequelize.define('EmployeeLoan', {
+    id, tenantId, employeeId: U, kind: S, title: S, principal: M, installmentAmount: M, startPeriod: S, status: S, note: T, createdBy: U, closedAt: D,
+  }, opts('employee_loans'));
+  EmployeeLoan.belongsTo(Employee, { foreignKey: 'employeeId', as: 'employee' });
+
   PlanEntitlement.belongsTo(FeatureCatalog, { foreignKey: 'featureId', as: 'feature' });
   Subscription.belongsTo(Plan, { foreignKey: 'planId', as: 'plan' });
   Subscription.hasMany(SubscriptionItem, { foreignKey: 'subscriptionId', as: 'items' });
@@ -310,7 +315,7 @@ export function defineModels(sequelize) {
   SupportTicket.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
 
   return {
-    SubscriptionRequest, TenantFeatureOverride, AttendanceDevice, DevicePunch, DeviceLog,
+    SubscriptionRequest, TenantFeatureOverride, EmployeeLoan, AttendanceDevice, DevicePunch, DeviceLog,
     TaxRuleSet, SalaryComponent, EmployeeSalary, PayrollRun, PayrollItem, PayrollAdjustment,
     Designation, Shift, EmployeeHistory, File, AttendanceRecord, AttendanceCorrection, Holiday, LeaveType, LeaveTransaction,
     LeaveRequest, LeaveApproval, Announcement, Notification,

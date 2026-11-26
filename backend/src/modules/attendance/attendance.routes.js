@@ -23,7 +23,7 @@ function myEmployeeId(req) {
 
 async function recompute(t, rec, employee, tz) {
   const policy = await getPolicy(t);
-  const sch = await scheduleFor(t, employee, policy);
+  const sch = await scheduleFor(t, employee, policy, rec.workDate);
   Object.assign(rec, compute(rec, sch, policy, tz));
   return rec;
 }
@@ -211,6 +211,9 @@ attendanceRouter.put('/policy', requirePermission('attendance:configure'), valid
     workStart: z.string().regex(/^\d{2}:\d{2}$/), workEnd: z.string().regex(/^\d{2}:\d{2}$/), breakMinutes: z.number().int().min(0).max(600),
     graceMinutes: z.number().int().min(0).max(240), halfDayMinutes: z.number().int().min(0).max(720), overtimeAfterMinutes: z.number().int().min(0).max(600),
     weeklyOffs: z.array(z.enum(['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'])).max(6), allowWeb: z.boolean(), requireLocation: z.boolean(), deductAbsences: z.boolean(),
+    lateRule: z.object({ enabled: z.boolean(), everyLateDays: z.number().int().min(1).max(31), deductDays: z.number().min(0).max(5).multipleOf(0.5) }).strict(),
+    earlyLeaveGraceMinutes: z.number().int().min(0).max(240), earlyLeaveCountsAsLate: z.boolean(),
+    notifyLate: z.boolean(), notifyMissingPunch: z.boolean(), repeatedLateThreshold: z.number().int().min(0).max(31),
     geofence: z.object({ enabled: z.boolean(), lat: z.number().min(-90).max(90).nullable(), lng: z.number().min(-180).max(180).nullable(), radiusM: z.number().int().min(20).max(50_000) })
       .refine((g) => !g.enabled || (g.lat != null && g.lng != null), 'Set the workplace location to enable geofencing'),
     ipAllowlist: z.array(z.union([z.ipv4(), z.ipv6()])).max(50),

@@ -41,9 +41,10 @@ function useAction(fn, { success, invalidate = [], onDone } = {}) {
 /**
  * fields: [{ name, label, type: text|number|email|password|textarea|select|checkbox|multiselect|date|datetime|json|tags, options, required, hint, span }]
  */
-export function FormDialog({ open, onClose, title, description, fields, initial = {}, onSubmit, submitLabel = 'Save', loading, error }) {
+export function FormDialog({ open, onClose, title, description, fields, initial = {}, onSubmit, submitLabel = 'Save', loading, error, onChange }) {
   const [v, setV] = useState(initial);
   useEffect(() => { if (open) setV(initial); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { onChange?.(v); }, [v]); // eslint-disable-line react-hooks/exhaustive-deps
   const errs = error?.fieldErrors ?? {};
   const submit = (e) => {
     e.preventDefault();

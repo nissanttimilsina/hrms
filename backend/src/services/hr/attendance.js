@@ -8,6 +8,11 @@ export const DEFAULT_POLICY = {
   weeklyOffs: ['SAT'], allowWeb: true, requireLocation: false,
   // Off by default: a company that doesn't track attendance must not see days without a record docked from pay.
   deductAbsences: false,
+  // Lateness: every N late days counts as `deductDays` unpaid days (off unless the company enables it).
+  lateRule: { enabled: false, everyLateDays: 3, deductDays: 0.5 },
+  earlyLeaveGraceMinutes: 10, earlyLeaveCountsAsLate: false,
+  // Notifications: late arrival / missing punch reminders, and a manager alert at N late days in a month (0 = off).
+  notifyLate: true, notifyMissingPunch: true, repeatedLateThreshold: 3,
   geofence: { enabled: false, lat: null, lng: null, radiusM: 200 }, ipAllowlist: [],
 };
 
@@ -16,13 +21,44 @@ export async function getPolicy(t) {
   return { ...DEFAULT_POLICY, ...(row?.value ?? {}) };
 }
 
-/** Effective schedule for an employee: their shift, else the default shift, else the company policy. */
-export async function scheduleFor(t, employee, policy) {
-  const shift = employee.shiftId
-    ? await app.Shift.findByPk(employee.shiftId, { transaction: t })
-    : await app.Shift.findOne({ where: { isDefault: true, deletedAt: null }, transaction: t });
-  if (shift) return { start: shift.startTime.slice(0, 5), end: shift.endTime.slice(0, 5), breakMinutes: shift.breakMinutes, graceMinutes: shift.graceMinutes, weeklyOffs: shift.weeklyOffs, shiftName: shift.name };
-  return { start: policy.workStart, end: policy.workEnd, breakMinutes: policy.breakMinutes, graceMinutes: policy.graceMinutes, weeklyOffs: policy.weeklyOffs, shiftName: null };
+/**
+ * Working calendar for a set of dates: resolves each employee's schedule (employee shift > branch default shift >
+ * company default shift > company policy), per-weekday hours, holidays and special working days (company-wide or
+ * per branch). Used by attendance, the daily register, payroll and leave day counts so they always agree.
+ */
+export async function loadCalendar(t, { from, to, policy }) {
+  const [shifts, branches, entries] = [
+    await app.Shift.findAll({ where: { deletedAt: null }, transaction: t }),
+    await app.Branch.findAll({ attributes: ['id', 'defaultShiftId'], transaction: t }),
+    from ? await app.Holiday.findAll({ where: { date: { [Op.between]: [from, to ?? from] }, isOptional: false }, transaction: t }) : [],
+  ];
+  const defShift = shifts.find((s) => s.isDefault);
+  const branchShift = new Map(branches.map((b) => [b.id, b.defaultShiftId]));
+  const applies = (h, e) => !h.branchIds.length || h.branchIds.includes(e.branchId);
+  const shiftFor = (e) => shifts.find((s) => s.id === e.shiftId) ?? shifts.find((s) => s.id === branchShift.get(e.branchId)) ?? defShift ?? null;
+  const scheduleOn = (e, date) => {
+    const sh = shiftFor(e);
+    const base = sh
+      ? { start: sh.startTime.slice(0, 5), end: sh.endTime.slice(0, 5), breakMinutes: sh.breakMinutes, graceMinutes: sh.graceMinutes, weeklyOffs: sh.weeklyOffs, shiftName: sh.name }
+      : { start: policy.workStart, end: policy.workEnd, breakMinutes: policy.breakMinutes, graceMinutes: policy.graceMinutes, weeklyOffs: policy.weeklyOffs, shiftName: null };
+    const day = date && sh?.dayHours?.[weekday(date)];
+    return day ? { ...base, start: day.start ?? base.start, end: day.end ?? base.end, breakMinutes: day.breakMinutes ?? base.breakMinutes } : base;
+  };
+  /** 'HOLIDAY' | 'WEEKLY_OFF' | 'WORKING' (+ holiday name) */
+  const dayType = (e, date) => {
+    const mine = entries.filter((h) => h.date === date && applies(h, e));
+    const hol = mine.find((h) => h.kind !== 'WORKING_DAY');
+    if (hol) return { type: 'HOLIDAY', name: hol.name };
+    if (mine.some((h) => h.kind === 'WORKING_DAY')) return { type: 'WORKING', special: true };
+    return scheduleOn(e, date).weeklyOffs.includes(weekday(date)) ? { type: 'WEEKLY_OFF' } : { type: 'WORKING' };
+  };
+  return { shiftFor, scheduleOn, dayType };
+}
+
+/** Effective schedule for one employee on one date (date optional → the shift's normal hours). */
+export async function scheduleFor(t, employee, policy, date = null) {
+  const cal = await loadCalendar(t, { from: date, to: date, policy });
+  return cal.scheduleOn(employee, date);
 }
 
 /** Pure calculation of late/early/worked/overtime/status for one record. Exported for unit tests. */
@@ -42,11 +78,14 @@ export function compute({ clockIn, clockOut }, sch, policy, tz) {
     out.workedMinutes = Math.max(0, gross - (gross > 300 ? sch.breakMinutes : 0));
     let outMin = localMinutes(new Date(clockOut), tz);
     if (end > 1440 && outMin < start) outMin += 1440;
-    out.earlyMinutes = Math.max(0, end - outMin);
+    const early = Math.max(0, end - outMin);
+    out.earlyMinutes = early > (policy.earlyLeaveGraceMinutes ?? 0) ? early : 0;
     const scheduled = end - start - sch.breakMinutes;
     const extra = out.workedMinutes - scheduled;
     out.overtimeMinutes = extra >= policy.overtimeAfterMinutes ? extra : 0;
-    if (out.workedMinutes < policy.halfDayMinutes) out.status = 'HALF_DAY';
+    // On short days (scheduled hours at or below the half-day threshold, e.g. a 4-hour Friday) half a shift counts as half a day.
+    const halfDay = scheduled <= policy.halfDayMinutes ? scheduled / 2 : policy.halfDayMinutes;
+    if (out.workedMinutes < halfDay) out.status = 'HALF_DAY';
   }
   return out;
 }
@@ -75,25 +114,22 @@ export async function dailyRegister(req, t, date) {
   const policy = await getPolicy(t);
   const ids = await scopedEmployeeIds(req, t);
   const empWhere = { deletedAt: null, status: { [Op.ne]: 'TERMINATED' }, joinedOn: { [Op.lte]: date }, ...(ids && { id: ids }) };
-  const [emps, records, leaves, holidays, shifts] = [
+  const [emps, records, leaves, cal] = [
     await app.Employee.findAll({ where: empWhere, attributes: ['id', 'employeeCode', 'firstName', 'lastName', 'branchId', 'departmentId', 'shiftId'], order: [['firstName', 'ASC']], transaction: t }),
     await app.AttendanceRecord.findAll({ where: { workDate: date }, transaction: t }),
     await app.LeaveRequest.findAll({ where: { status: 'APPROVED', startDate: { [Op.lte]: date }, endDate: { [Op.gte]: date } }, include: [{ model: app.LeaveType, as: 'leaveType', attributes: ['name'] }], transaction: t }),
-    await app.Holiday.findAll({ where: { date, isOptional: false }, transaction: t }),
-    await app.Shift.findAll({ where: { deletedAt: null }, transaction: t }),
+    await loadCalendar(t, { from: date, to: date, policy }),
   ];
   const recBy = new Map(records.map((r) => [r.employeeId, r]));
   const leaveBy = new Map(leaves.map((l) => [l.employeeId, l]));
-  const defShift = shifts.find((s) => s.isDefault);
   const isPast = date < localDate(new Date(), tz);
   return emps.map((e) => {
     const r = recBy.get(e.id);
-    const shift = shifts.find((s) => s.id === e.shiftId) ?? defShift;
-    const offs = shift?.weeklyOffs ?? policy.weeklyOffs;
-    const holiday = holidays.find((h) => !h.branchIds.length || h.branchIds.includes(e.branchId));
+    const day = cal.dayType(e, date);
+    const holiday = day.type === 'HOLIDAY' ? { name: day.name } : null;
     const leave = leaveBy.get(e.id);
     let status = r?.status;
-    if (!r) status = leave ? 'ON_LEAVE' : holiday ? 'HOLIDAY' : offs.includes(weekday(date)) ? 'WEEKLY_OFF' : isPast ? 'ABSENT' : 'NOT_IN';
+    if (!r) status = leave ? 'ON_LEAVE' : holiday ? 'HOLIDAY' : day.type === 'WEEKLY_OFF' ? 'WEEKLY_OFF' : isPast ? 'ABSENT' : 'NOT_IN';
     return {
       employee: { id: e.id, code: e.employeeCode, name: `${e.firstName} ${e.lastName}`, branchId: e.branchId, departmentId: e.departmentId },
       status, record: r ?? null, leave: leave ? { type: leave.leaveType.name, halfDay: leave.halfDay } : null, holiday: holiday?.name ?? null,
@@ -103,27 +139,24 @@ export async function dailyRegister(req, t, date) {
 
 /** Per-employee totals over a date range (feeds payroll payable days). */
 export async function rangeSummary(t, { employeeIds, from, to, tz, policy }) {
-  const [emps, records, leaves, holidays, shifts] = [
+  const [emps, records, leaves, cal] = [
     await app.Employee.findAll({ where: { id: employeeIds }, attributes: ['id', 'employeeCode', 'firstName', 'lastName', 'branchId', 'shiftId', 'joinedOn', 'exitedOn'], transaction: t }),
     await app.AttendanceRecord.findAll({ where: { employeeId: employeeIds, workDate: { [Op.between]: [from, to] } }, transaction: t }),
     await app.LeaveRequest.findAll({ where: { employeeId: employeeIds, status: 'APPROVED', startDate: { [Op.lte]: to }, endDate: { [Op.gte]: from } }, include: [{ model: app.LeaveType, as: 'leaveType', attributes: ['isPaid'] }], transaction: t }),
-    await app.Holiday.findAll({ where: { date: { [Op.between]: [from, to] }, isOptional: false }, transaction: t }),
-    await app.Shift.findAll({ where: { deletedAt: null }, transaction: t }),
+    await loadCalendar(t, { from, to, policy }),
   ];
   const today = localDate(new Date(), tz);
-  const defShift = shifts.find((s) => s.isDefault);
+  const rule = policy.lateRule ?? {};
   return emps.map((e) => {
-    const offs = (shifts.find((s) => s.id === e.shiftId) ?? defShift)?.weeklyOffs ?? policy.weeklyOffs;
-    const s = { employeeId: e.id, code: e.employeeCode, name: `${e.firstName} ${e.lastName}`, calendarDays: 0, workingDays: 0, present: 0, late: 0, halfDay: 0, absent: 0, paidLeave: 0, unpaidLeave: 0, holidays: 0, weeklyOffs: 0, lateMinutes: 0, overtimeMinutes: 0, workedMinutes: 0 };
+    const s = { employeeId: e.id, code: e.employeeCode, name: `${e.firstName} ${e.lastName}`, calendarDays: 0, workingDays: 0, present: 0, late: 0, early: 0, halfDay: 0, absent: 0, paidLeave: 0, unpaidLeave: 0, holidays: 0, weeklyOffs: 0, lateMinutes: 0, earlyMinutes: 0, overtimeMinutes: 0, workedMinutes: 0, missingPunch: 0 };
     for (const d of eachDate(from, to)) {
       s.calendarDays += 1;
       if (d < e.joinedOn || (e.exitedOn && d > e.exitedOn)) { s.calendarDays -= 1; continue; }
       const r = records.find((x) => x.employeeId === e.id && x.workDate === d);
       const lv = leaves.find((x) => x.employeeId === e.id && x.startDate <= d && x.endDate >= d);
-      const hol = holidays.find((h) => h.date === d && (!h.branchIds.length || h.branchIds.includes(e.branchId)));
-      const off = offs.includes(weekday(d));
-      if (hol) { s.holidays += 1; continue; }
-      if (off && !r) { s.weeklyOffs += 1; continue; }
+      const day = cal.dayType(e, d);
+      if (day.type === 'HOLIDAY') { s.holidays += 1; continue; }
+      if (day.type === 'WEEKLY_OFF' && !r) { s.weeklyOffs += 1; continue; }
       s.workingDays += 1;
       if (lv) {
         const amt = lv.halfDay ? 0.5 : 1;
@@ -132,10 +165,15 @@ export async function rangeSummary(t, { employeeIds, from, to, tz, policy }) {
         continue;
       }
       if (r) {
-        s.lateMinutes += r.lateMinutes; s.overtimeMinutes += r.overtimeMinutes; s.workedMinutes += r.workedMinutes;
-        if (r.status === 'HALF_DAY') { s.halfDay += 1; s.present += 0.5; s.absent += 0.5; } else { s.present += 1; if (r.status === 'LATE') s.late += 1; }
+        s.lateMinutes += r.lateMinutes; s.overtimeMinutes += r.overtimeMinutes; s.workedMinutes += r.workedMinutes; s.earlyMinutes += r.earlyMinutes ?? 0;
+        if (r.earlyMinutes > 0) s.early += 1;
+        if (r.clockIn && !r.clockOut && d < today) s.missingPunch += 1;
+        if (r.status === 'HALF_DAY') { s.halfDay += 1; s.present += 0.5; s.absent += 0.5; } else { s.present += 1; if (r.status === 'LATE' || r.lateMinutes > 0) s.late += 1; }
       } else if (d < today) s.absent += 1;
     }
+    // Late rule: every N late days (optionally counting early departures) = X unpaid days.
+    s.lateCountForRule = s.late + (policy.earlyLeaveCountsAsLate ? s.early : 0);
+    s.lateDeductionDays = rule.enabled && rule.everyLateDays > 0 ? Math.floor(s.lateCountForRule / rule.everyLateDays) * Number(rule.deductDays ?? 0) : 0;
     return s;
   });
 }

@@ -17,6 +17,7 @@ const code = z.string().trim().toUpperCase().regex(/^[A-Z0-9_-]{1,20}$/, 'Use 1â
 const branchBody = z.object({
   code, name: z.string().trim().min(2).max(120), address: z.string().trim().max(500).nullish(),
   isHeadOffice: z.boolean().optional(), isActive: z.boolean().optional(),
+  defaultShiftId: z.string().uuid().nullish(), // the branch's working schedule unless an employee has their own shift
 }).strict();
 
 organizationRouter.get('/branches', requirePermission('branches:view'),
@@ -142,6 +143,10 @@ const shiftBody = z.object({
   name: z.string().trim().min(2).max(80), startTime: z.string().regex(/^\d{2}:\d{2}$/), endTime: z.string().regex(/^\d{2}:\d{2}$/),
   breakMinutes: z.number().int().min(0).max(600).default(60), graceMinutes: z.number().int().min(0).max(240).default(10),
   weeklyOffs: z.array(z.enum(['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'])).max(6).default(['SAT']), isDefault: z.boolean().default(false),
+  // Different hours on some weekdays, e.g. { FRI: { start: '10:00', end: '15:00', breakMinutes: 0 } }
+  dayHours: z.partialRecord(z.enum(['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT']), z.object({
+    start: z.string().regex(/^\d{2}:\d{2}$/), end: z.string().regex(/^\d{2}:\d{2}$/), breakMinutes: z.number().int().min(0).max(600).optional(),
+  }).strict()).default({}),
 }).strict();
 organizationRouter.get('/shifts', requirePermission('shifts:view'), asyncHandler(async (req, res) =>
   ok(res, await req.tx((t) => app.Shift.findAll({ where: { deletedAt: null }, order: [['name', 'ASC']], transaction: t })))));

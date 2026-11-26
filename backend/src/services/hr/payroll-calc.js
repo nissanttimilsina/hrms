@@ -34,12 +34,13 @@ export function annualTax(taxable, slabs, { waiveSst = false } = {}) {
  * @param input.monthsRemaining  months left in FY including this one (1..12)
  * @param input.employee     { gender, maritalStatus, pan, bank }
  */
-export function calculateItem({ salary, components, att, adjustments = [], rules, ytd = { taxable: 0, tax: 0 }, monthsRemaining = 12, employee }) {
+export function calculateItem({ salary, components, att, adjustments = [], recoveries = [], rules, ytd = { taxable: 0, tax: 0 }, monthsRemaining = 12, employee }) {
   const anomalies = [];
   const payFactor = att.calendarDays > 0 ? Math.max(0, (att.calendarDays - att.unpaidDays) / att.calendarDays) : 0;
   const lines = [];
   const basic = r2(Number(salary.basic) * payFactor);
-  lines.push({ code: 'BASIC', name: 'Basic salary', kind: 'EARNING', amount: basic, taxable: true });
+  const paidDays = r2(att.calendarDays - Math.min(att.calendarDays, att.unpaidDays));
+  lines.push({ code: 'BASIC', name: payFactor < 1 ? `Basic salary (${paidDays} of ${att.calendarDays} days paid)` : 'Basic salary', kind: 'EARNING', amount: basic, taxable: true });
 
   for (const c of salary.components ?? []) {
     const def = components.find((d) => d.code === c.code && d.isActive !== false);
@@ -52,7 +53,7 @@ export function calculateItem({ salary, components, att, adjustments = [], rules
     const ot = r2((att.overtimeMinutes / 60) * hourly * (rules.overtimeMultiplier ?? 1.5));
     if (ot) lines.push({ code: 'OVERTIME', name: `Overtime (${(att.overtimeMinutes / 60).toFixed(1)} h)`, kind: 'EARNING', amount: ot, taxable: true });
   }
-  for (const a of adjustments) lines.push({ code: 'ADJ', name: a.description, kind: a.kind, amount: r2(Number(a.amount)), taxable: a.taxable });
+  for (const a of adjustments) lines.push({ code: a.code && a.code !== 'OTHER' ? a.code : 'ADJ', name: a.description, kind: a.kind, amount: r2(Number(a.amount)), taxable: a.taxable });
 
   const earnings = lines.filter((l) => l.kind === 'EARNING');
   const gross = r2(earnings.reduce((n, l) => n + l.amount, 0));
@@ -91,19 +92,33 @@ export function calculateItem({ salary, components, att, adjustments = [], rules
     ...(cit ? [{ code: 'CIT', name: 'Citizen Investment Trust', kind: 'DEDUCTION', amount: cit }] : []),
     ...(monthTax ? [{ code: 'TDS', name: 'Income tax (TDS)', kind: 'DEDUCTION', amount: monthTax }] : []),
   ];
-  const allLines = [...lines, ...deductionLines];
+  // Advance/loan instalments come last and never push net pay below zero.
+  let available = r2(gross - [...lines, ...deductionLines].filter((l) => l.kind === 'DEDUCTION').reduce((n, l) => n + l.amount, 0));
+  const recoveryLines = [];
+  for (const rc of recoveries) {
+    const amount = r2(Math.max(0, Math.min(rc.amount, available)));
+    if (amount < rc.amount) anomalies.push(`${rc.title}: only NPR ${amount} of the NPR ${rc.amount} instalment could be recovered`);
+    if (amount <= 0) continue;
+    available = r2(available - amount);
+    recoveryLines.push({ code: rc.kind, name: `${rc.title}, instalment (balance after: NPR ${r2(rc.balance - amount)})`, kind: 'DEDUCTION', amount, loanId: rc.loanId });
+  }
+  const allLines = [...lines, ...deductionLines, ...recoveryLines];
   const deductions = r2(allLines.filter((l) => l.kind === 'DEDUCTION').reduce((n, l) => n + l.amount, 0));
   const net = r2(gross - deductions);
 
   if (!employee.pan) anomalies.push('Missing PAN');
   if (!employee.bank?.last4) anomalies.push('Missing bank account');
   if (net <= 0) anomalies.push('Net pay is zero or negative');
-  if (payFactor < 1) anomalies.push(`Unpaid days: ${att.unpaidDays}`);
+  if (payFactor < 1) {
+    const b = att.unpaidBreakdown ?? {};
+    const parts = [['unpaid leave', b.unpaidLeave], ['absences', b.absences], ['late-arrival rule', b.lateRule], ['outside employment', b.outsideEmployment]].filter(([, v]) => v > 0).map(([k, v]) => `${v} ${k}`);
+    anomalies.push(`Unpaid days: ${att.unpaidDays}${parts.length ? ` (${parts.join(', ')})` : ''}`);
+  }
 
   return {
     lines: allLines, gross, deductions, tax: monthTax, ssfEmployee, ssfEmployer, net, anomalies,
     taxDetail: {
-      payFactor: r2(payFactor), assessableMonth, retirementMonth: r2(retirementMonth), monthsRemaining, projectedAssessable: r2(projectedAssessable),
+      payFactor: r2(payFactor), paidDays, unpaidBreakdown: att.unpaidBreakdown ?? null, assessableMonth, retirementMonth: r2(retirementMonth), monthsRemaining, projectedAssessable: r2(projectedAssessable),
       projectedRetirement, retirementDeduction, insuranceDeduction: insurance, annualTaxable, schedule, bands: t.bands, annualTaxBeforeRebate: t.tax,
       femaleRebate: rebate, annualTax: annual, ytdTaxPaid: Number(ytd.tax ?? 0), monthTax, sstWaived: !!(rules.sstWaivedForSsf && salary.ssfEnrolled), pfEmployer,
     },

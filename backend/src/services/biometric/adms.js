@@ -141,8 +141,8 @@ function workDateFor(at, sch, tz) {
  */
 async function applyPunch(t, employee, at, device, tz) {
   const policy = await getPolicy(t);
-  const sch = await scheduleFor(t, employee, policy);
-  const workDate = workDateFor(at, sch, tz);
+  const workDate = workDateFor(at, await scheduleFor(t, employee, policy), tz);
+  const sch = await scheduleFor(t, employee, policy, workDate); // that day's hours (per-weekday overrides)
   const rec = await app.AttendanceRecord.findOne({ where: { employeeId: employee.id, workDate }, transaction: t, lock: t.LOCK.UPDATE });
   const meta = { source: 'DEVICE', deviceId: device.id, device: device.name };
   if (!rec) {

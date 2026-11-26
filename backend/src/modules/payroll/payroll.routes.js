@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { Op } from 'sequelize';
+import { Op, QueryTypes } from 'sequelize';
 import PDFDocument from 'pdfkit';
-import { app } from '../../database/index.js';
+import { app, appDb } from '../../database/index.js';
 import { requirePermission } from '../../middleware/authorize.js';
 import { validate } from '../../middleware/common.js';
 import { recordInScope } from '../../services/rbac.service.js';
@@ -81,7 +81,12 @@ payrollRouter.post('/salaries', requirePermission('payroll:edit'), validate({
 }));
 
 payrollRouter.post('/adjustments', requirePermission('payroll:edit'), validate({
-  body: z.object({ employeeId: z.string().uuid(), period: PERIOD, kind: z.enum(['EARNING', 'DEDUCTION']), description: z.string().trim().min(3).max(200), amount: money.refine((x) => x > 0), taxable: z.boolean().default(true) }).strict(),
+  body: z.object({
+    employeeId: z.string().uuid(), period: PERIOD, kind: z.enum(['EARNING', 'DEDUCTION']),
+    code: z.enum(['BONUS', 'INCENTIVE', 'LEAVE_ENCASHMENT', 'ARREARS', 'REIMBURSEMENT', 'FINE', 'OTHER']).default('OTHER'),
+    description: z.string().trim().min(3).max(200), amount: money.refine((x) => x > 0), taxable: z.boolean().default(true),
+  }).strict().refine((b) => !['BONUS', 'INCENTIVE', 'LEAVE_ENCASHMENT', 'ARREARS', 'REIMBURSEMENT'].includes(b.code) || b.kind === 'EARNING', { message: 'This type is an earning', path: ['kind'] })
+    .refine((b) => b.code !== 'FINE' || b.kind === 'DEDUCTION', { message: 'A fine is a deduction', path: ['kind'] }),
 }), asyncHandler(async (req, res) => {
   const row = await req.tx(async (t) => {
     const locked = await app.PayrollRun.findOne({ where: { period: req.body.period, status: { [Op.in]: ['SUBMITTED', 'APPROVED', 'PAID'] } }, transaction: t });
@@ -91,6 +96,68 @@ payrollRouter.post('/adjustments', requirePermission('payroll:edit'), validate({
     return r;
   });
   return created(res, row);
+}));
+
+// --------------------------------------------------------------------------- advances & loans
+/** Amount recovered per loan from approved/paid runs (optionally excluding one run). */
+async function loanRecovered(t, excludeRunId) {
+  const rows = await appDb.query(
+    `SELECT l->>'loanId' AS loan_id, sum((l->>'amount')::numeric) AS amount
+       FROM payroll_items i JOIN payroll_runs r ON r.tenant_id = i.tenant_id AND r.id = i.run_id
+       CROSS JOIN LATERAL jsonb_array_elements(i.lines) l
+      WHERE r.status IN ('APPROVED','PAID') AND l ? 'loanId' ${excludeRunId ? 'AND r.id <> :run' : ''}
+      GROUP BY 1`, { replacements: { run: excludeRunId }, type: QueryTypes.SELECT, transaction: t });
+  return new Map(rows.map((x) => [x.loan_id, Number(x.amount)]));
+}
+const loanView = (l, recovered) => ({ ...l.toJSON(), recovered: r2(recovered.get(l.id) ?? 0), balance: r2(Number(l.principal) - (recovered.get(l.id) ?? 0)) });
+
+payrollRouter.get('/loans', requirePermission('payroll:view'), (req, res, next) => requireWideScope(req, res, next), validate({ query: z.object({ employeeId: z.string().uuid().optional(), status: z.enum(['ACTIVE', 'CLOSED', 'CANCELLED']).optional() }).strict() }), asyncHandler(async (req, res) => {
+  const out = await req.tx(async (t) => {
+    const ids = await scopedEmployeeIds(req, t);
+    const where = { ...(req.query.status && { status: req.query.status }), ...(req.query.employeeId && { employeeId: req.query.employeeId }), ...(ids && { employeeId: ids.filter((x) => !req.query.employeeId || x === req.query.employeeId) }) };
+    const rows = await app.EmployeeLoan.findAll({ where, order: [['createdAt', 'DESC']], include: [{ model: app.Employee, as: 'employee', attributes: ['id', 'employeeCode', 'firstName', 'lastName'] }], transaction: t });
+    const rec = await loanRecovered(t, null);
+    return rows.map((l) => loanView(l, rec));
+  });
+  return ok(res, out);
+}));
+
+payrollRouter.get('/loans/me', requirePermission('payroll:view'), asyncHandler(async (req, res) => {
+  const employeeId = req.auth.principal.employeeId;
+  if (!employeeId) return ok(res, []);
+  const out = await req.tx(async (t) => {
+    const rows = await app.EmployeeLoan.findAll({ where: { employeeId, status: { [Op.ne]: 'CANCELLED' } }, order: [['createdAt', 'DESC']], transaction: t });
+    const rec = await loanRecovered(t, null);
+    return rows.map((l) => loanView(l, rec));
+  });
+  return ok(res, out);
+}));
+
+payrollRouter.post('/loans', requirePermission('payroll:create'), validate({
+  body: z.object({
+    employeeId: z.string().uuid(), kind: z.enum(['ADVANCE', 'LOAN']), title: z.string().trim().min(3).max(120),
+    principal: money.refine((x) => x > 0), installmentAmount: money.refine((x) => x > 0), startPeriod: PERIOD, note: z.string().trim().max(500).optional(),
+  }).strict().refine((b) => b.installmentAmount <= b.principal, { message: 'Instalment cannot exceed the amount', path: ['installmentAmount'] }),
+}), asyncHandler(async (req, res) => {
+  const row = await req.tx(async (t) => {
+    const emp = await app.Employee.findOne({ where: { id: req.body.employeeId, deletedAt: null }, transaction: t });
+    if (!emp || !recordInScope(req.scopes, req.auth.principal, emp)) throw NotFound('Employee');
+    const r = await app.EmployeeLoan.create({ ...req.body, tenantId: req.auth.tenantId, createdBy: req.auth.userId }, { transaction: t });
+    await audit({ transaction: t, tenantId: req.auth.tenantId, actor: tenantActor(req), action: 'payroll.loan_create', entityType: 'employee', entityId: emp.id, after: req.body, req });
+    return r;
+  });
+  return created(res, row);
+}));
+
+payrollRouter.post('/loans/:id/cancel', requirePermission('payroll:edit'), validate({ ...idParam, body: z.object({ reason: z.string().trim().min(3).max(300) }).strict() }), asyncHandler(async (req, res) => {
+  const row = await req.tx(async (t) => {
+    const l = await app.EmployeeLoan.findOne({ where: { id: req.params.id, status: 'ACTIVE' }, transaction: t, lock: t.LOCK.UPDATE });
+    if (!l) throw NotFound('Active advance or loan');
+    await l.update({ status: 'CANCELLED', closedAt: new Date(), note: [l.note, `Cancelled: ${req.body.reason}`].filter(Boolean).join('\n') }, { transaction: t });
+    await audit({ transaction: t, tenantId: req.auth.tenantId, actor: tenantActor(req), action: 'payroll.loan_cancel', entityType: 'employee_loan', entityId: l.id, after: req.body, req });
+    return l;
+  });
+  return ok(res, row);
 }));
 
 // --------------------------------------------------------------------------- runs
@@ -134,6 +201,8 @@ payrollRouter.post('/runs/:id/calculate', requirePermission('payroll:create'), v
     const priorRuns = await app.PayrollRun.findAll({ where: { fiscalYear: run.fiscalYear, status: { [Op.in]: ['APPROVED', 'PAID'] }, periodEnd: { [Op.lt]: run.periodStart } }, attributes: ['id'], transaction: t });
     const priorItems = priorRuns.length ? await app.PayrollItem.findAll({ where: { runId: priorRuns.map((r) => r.id) }, attributes: ['employeeId', 'tax', 'taxDetail'], transaction: t }) : [];
     const adjustments = await app.PayrollAdjustment.findAll({ where: { period: run.period }, transaction: t });
+    const loans = await app.EmployeeLoan.findAll({ where: { status: 'ACTIVE', startPeriod: { [Op.lte]: run.period } }, transaction: t });
+    const recovered = await loanRecovered(t, run.id);
     const m = Number(run.period.split('-')[1]);
     const monthsRemaining = 12 - ((m - 4 + 12) % 12); // Shrawan (BS month 4) is month 1 of the fiscal year
     const periodDays = (new Date(run.periodEnd) - new Date(run.periodStart)) / 86_400_000 + 1;
@@ -144,21 +213,27 @@ payrollRouter.post('/runs/:id/calculate', requirePermission('payroll:create'), v
       const salary = await app.EmployeeSalary.findOne({ where: { employeeId: e.id, effectiveFrom: { [Op.lte]: run.periodEnd } }, order: [['effectiveFrom', 'DESC']], transaction: t });
       if (!salary) { skipped.push({ employeeId: e.id, name: `${e.firstName} ${e.lastName}`, reason: 'No salary configured' }); continue; }
       const a = att.find((x) => x.employeeId === e.id);
-      // Days outside employment are unpaid, plus unpaid leave; absences only when the company opts in.
+      // Unpaid days: outside employment + unpaid leave + (opt-in) absences + (opt-in) late-arrival rule.
       const outside = periodDays - a.calendarDays;
-      const unpaidDays = r2(outside + a.unpaidLeave + (policy.deductAbsences ? a.absent : 0));
+      const absences = policy.deductAbsences ? a.absent : 0;
+      const unpaidBreakdown = { outsideEmployment: r2(outside), unpaidLeave: r2(a.unpaidLeave), absences: r2(absences), lateRule: r2(a.lateDeductionDays ?? 0), lateCount: a.lateCountForRule ?? a.late };
+      const unpaidDays = r2(outside + a.unpaidLeave + absences + (a.lateDeductionDays ?? 0));
+      const recoveries = loans.filter((l) => l.employeeId === e.id).map((l) => {
+        const balance = r2(Number(l.principal) - (recovered.get(l.id) ?? 0));
+        return { loanId: l.id, kind: l.kind, title: l.title, balance, amount: r2(Math.min(Number(l.installmentAmount), balance)) };
+      }).filter((rc) => rc.amount > 0);
       const mine = priorItems.filter((i) => i.employeeId === e.id);
       const ytd = { assessable: mine.reduce((n, i) => n + Number(i.taxDetail.assessableMonth ?? 0), 0), retirement: mine.reduce((n, i) => n + Number(i.taxDetail.retirementMonth ?? 0), 0), tax: mine.reduce((n, i) => n + Number(i.tax), 0) };
       const c = calculateItem({
         salary, components, rules, ytd, monthsRemaining,
-        att: { calendarDays: periodDays, unpaidDays: Math.min(periodDays, unpaidDays), overtimeMinutes: a.overtimeMinutes, workingDaysInPeriod: a.workingDays },
-        adjustments: adjustments.filter((x) => x.employeeId === e.id), employee: { gender: e.gender, maritalStatus: e.maritalStatus, pan: e.pan, bank: e.bank },
+        att: { calendarDays: periodDays, unpaidDays: Math.min(periodDays, unpaidDays), unpaidBreakdown, overtimeMinutes: a.overtimeMinutes, workingDaysInPeriod: a.workingDays },
+        adjustments: adjustments.filter((x) => x.employeeId === e.id), recoveries, employee: { gender: e.gender, maritalStatus: e.maritalStatus, pan: e.pan, bank: e.bank },
       });
       const prevItem = mine.length ? await app.PayrollItem.findOne({ where: { employeeId: e.id, runId: priorRuns.map((r) => r.id) }, order: [['createdAt', 'DESC']], transaction: t }) : null;
       if (prevItem && Number(prevItem.net) > 0 && Math.abs(c.net - Number(prevItem.net)) / Number(prevItem.net) > 0.3) c.anomalies.push('Net pay changed by more than 30% from last month');
       items.push(await app.PayrollItem.create({
         tenantId: req.auth.tenantId, runId: run.id, employeeId: e.id, lines: c.lines, taxDetail: c.taxDetail, anomalies: c.anomalies,
-        attendance: { periodDays, ...a, unpaidDays: Math.min(periodDays, unpaidDays), fyStart: fy.start },
+        attendance: { periodDays, ...a, unpaidDays: Math.min(periodDays, unpaidDays), unpaidBreakdown, fyStart: fy.start },
         snapshot: { salary: salary.toJSON(), employee: { code: e.employeeCode, name: `${e.firstName} ${e.lastName}`, pan: e.pan, ssfId: e.ssfId, bank: { bankName: e.bank?.bankName, accountName: e.bank?.accountName, last4: e.bank?.last4, accountNumberEnc: e.bank?.accountNumberEnc }, branchId: e.branchId, departmentId: e.departmentId } },
         gross: c.gross, deductions: c.deductions, tax: c.tax, ssfEmployee: c.ssfEmployee, ssfEmployer: c.ssfEmployer, net: c.net,
       }, { transaction: t }));
@@ -200,6 +275,11 @@ payrollRouter.post('/runs/:id/approve', requirePermission('payroll:approve'), va
     const r = await loadRun(t, req.params.id, ['SUBMITTED']);
     if (r.submittedBy === req.auth.userId) throw Forbidden('Payroll must be approved by someone other than the person who submitted it', 'MAKER_CHECKER');
     await r.update({ status: 'APPROVED', approvedBy: req.auth.userId, approvedAt: new Date() }, { transaction: t });
+    // Close advances/loans that this run finished recovering.
+    const done = await loanRecovered(t, null);
+    for (const l of await app.EmployeeLoan.findAll({ where: { status: 'ACTIVE' }, transaction: t })) {
+      if ((done.get(l.id) ?? 0) >= Number(l.principal) - 0.005) await l.update({ status: 'CLOSED', closedAt: new Date() }, { transaction: t });
+    }
     await audit({ transaction: t, tenantId: req.auth.tenantId, actor: tenantActor(req), action: 'payroll.approve', entityType: 'payroll_run', entityId: r.id, after: r.totals, req });
     return r;
   });
@@ -310,6 +390,12 @@ payrollRouter.get('/payslips/:itemId/pdf', requirePermission('payroll:view'), va
   doc.fontSize(16).fillColor('#0f1729').text(req.auth.ctx.tenant.name).fontSize(11).fillColor('#64748b').text(`Payslip · ${p.label} (${p.start} to ${p.end})`);
   doc.moveDown().fontSize(10).fillColor('#334155').text(`Employee: ${e.name} (${e.code})   PAN: ${e.pan ?? '—'}   Bank: ${e.bank?.bankName ?? '—'} ****${e.bank?.last4 ?? ''}`);
   doc.text(`Payable days: ${r2(item.attendance.periodDays - item.attendance.unpaidDays)} of ${item.attendance.periodDays}`);
+  const ub = item.attendance.unpaidBreakdown;
+  if (ub && item.attendance.unpaidDays > 0) {
+    const parts = [['unpaid leave', ub.unpaidLeave], ['absent', ub.absences], [`late-arrival rule (${ub.lateCount} late days)`, ub.lateRule], ['before joining / after leaving', ub.outsideEmployment]].filter(([, v]) => v > 0);
+    doc.text(`Unpaid days: ${parts.map(([k, v]) => `${v} ${k}`).join(', ')}`);
+  }
+  doc.text(`Attendance: ${item.attendance.present ?? 0} present, ${item.attendance.late ?? 0} late, ${item.attendance.absent ?? 0} absent, ${item.attendance.paidLeave ?? 0} paid leave, ${((item.attendance.overtimeMinutes ?? 0) / 60).toFixed(1)} h overtime`);
   let y = doc.y + 15;
   const col = (title, rows, x) => {
     let yy = y; doc.fontSize(10).fillColor('#64748b').text(title, x, yy); yy += 16;

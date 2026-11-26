@@ -238,12 +238,27 @@ function Salary({ id }) {
 }
 
 function LeaveBalance({ id }) {
-  const { data, isPending } = useQuery({ queryKey: ['balance', id], queryFn: () => api.get(`/leave/balances/${id}`) });
+  const a = useAuth();
+  const { data, isPending, refetch } = useQuery({ queryKey: ['balance', id], queryFn: () => api.get(`/leave/balances/${id}`) });
+  const { data: types } = useQuery({ queryKey: ['leave-types'], queryFn: () => api.get('/leave/types') });
+  const [enc, setEnc] = useState(null);
+  const encash = useAction((b) => api.post('/leave/encashments', b), { success: (r) => `Encashed: NPR ${r.amount} added to payroll`, onDone: () => { setEnc(null); refetch(); } });
   if (isPending) return <Skeleton className="h-40" />;
-  return <DataTable rows={data.balances} rowKey="leaveTypeId" caption={`Leave balances ${data.year}`} columns={[
-    { key: 'name', header: `Leave type (FY ${data.year})` }, { key: 'entitled', header: 'Entitled', align: 'right' }, { key: 'used', header: 'Used', align: 'right' },
-    { key: 'pending', header: 'Pending', align: 'right' }, { key: 'available', header: 'Available', align: 'right', render: (r) => (r.tracked ? <strong>{r.available}</strong> : 'Unlimited') },
-  ]} />;
+  const canEncash = a.can('leave:manage') && a.can('payroll:edit') && a.feature('payroll');
+  const encashable = new Set((types ?? []).filter((x) => x.encashable).map((x) => x.id));
+  return (
+    <>
+      <DataTable rows={data.balances} rowKey="leaveTypeId" caption={`Leave balances ${data.year}`} columns={[
+        { key: 'name', header: `Leave type (FY ${data.year})` }, { key: 'entitled', header: 'Entitled', align: 'right' }, { key: 'used', header: 'Used', align: 'right' },
+        { key: 'pending', header: 'Pending', align: 'right' }, { key: 'available', header: 'Available', align: 'right', render: (r) => (r.tracked ? <strong>{r.available}</strong> : 'Unlimited') },
+        ...(canEncash ? [{ key: 'x', header: '', render: (r) => encashable.has(r.leaveTypeId) && r.available > 0 && <Button size="sm" variant="ghost" onClick={() => setEnc(r)}>Encash</Button> }] : []),
+      ]} />
+      {enc && <FormDialog open onClose={() => setEnc(null)} title={`Encash ${enc.name}`} description={`Available: ${enc.available} day(s). Paid as a taxable earning in the chosen payroll month. Leave the amount empty to use basic salary ÷ 30 per day.`}
+        initial={{ days: Math.min(1, enc.available) }}
+        fields={[{ name: 'days', label: 'Days', type: 'number', required: true }, { name: 'period', label: 'Payroll month (BS, e.g. 2083-08)', required: true }, { name: 'amount', label: 'Amount (NPR, optional)', type: 'number' }, { name: 'note', label: 'Note' }]}
+        loading={encash.isPending} error={encash.error} onSubmit={(b) => encash.mutate({ employeeId: id, leaveTypeId: enc.leaveTypeId, ...b })} />}
+    </>
+  );
 }
 
 // =========================================================================== organization
@@ -251,20 +266,28 @@ export function Organization() {
   const [tab, setTab] = useState('branches');
   const a = useAuth();
   const tabs = [['branches', 'Branches'], ['departments', 'Departments'], ['designations', 'Designations'], a.feature('shifts') && ['shifts', 'Shifts']].filter(Boolean);
+  const { data: shifts } = useQuery({ queryKey: ['/shifts'], queryFn: () => api.get('/shifts'), enabled: a.can('shifts:view') });
+  const shiftOpts = (shifts ?? []).map((x) => ({ value: x.id, label: `${x.name} (${x.startTime.slice(0, 5)}–${x.endTime.slice(0, 5)})` }));
+  // "FRI 10:00-15:00, SUN 10:00-16:00" ⇄ { FRI: { start, end } }
+  const toText = (dh) => Object.entries(dh ?? {}).map(([d, h]) => `${d} ${h.start}-${h.end}`).join(', ');
+  const fromText = (txt) => Object.fromEntries(String(txt ?? '').split(',').map((x) => x.trim().toUpperCase()).filter(Boolean).map((x) => { const m = /^(SUN|MON|TUE|WED|THU|FRI|SAT)\s+(\d{2}:\d{2})\s*-\s*(\d{2}:\d{2})$/.exec(x); return m ? [m[1], { start: m[2], end: m[3] }] : [x, null]; }));
   return (
     <>
       <PageHeader title="Organization" description="Branches, departments, designations and work shifts" />
       <div className="mb-4 flex gap-1 border-b border-line" role="tablist">{tabs.map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${tab === k ? 'border-brand-600 text-brand-700' : 'border-transparent text-ink-500'}`}>{l}</button>)}</div>
-      {tab === 'branches' && <SimpleCrud path="/branches" perm="branches" listQ="?pageSize=100&sort=name&order=asc" fields={[{ name: 'code', label: 'Code', required: true }, { name: 'name', label: 'Name', required: true }, { name: 'address', label: 'Address', type: 'textarea', rows: 2 }]} columns={[{ key: 'code', header: 'Code' }, { key: 'name', header: 'Name', render: (r) => <>{r.name} {r.isHeadOffice && <Badge tone="brand">Head office</Badge>}</> }, { key: 'address', header: 'Address' }]} />}
+      {tab === 'branches' && <SimpleCrud path="/branches" perm="branches" listQ="?pageSize=100&sort=name&order=asc" fields={[{ name: 'code', label: 'Code', required: true }, { name: 'name', label: 'Name', required: true }, ...(shiftOpts.length ? [{ name: 'defaultShiftId', label: 'Working schedule', type: 'select', options: shiftOpts, placeholder: 'Company default', hint: 'Used for employees here without their own shift' }] : []), { name: 'address', label: 'Address', type: 'textarea', rows: 2 }]}
+        transform={(b) => ({ ...b, ...('defaultShiftId' in b && { defaultShiftId: b.defaultShiftId || null }) })}
+        columns={[{ key: 'code', header: 'Code' }, { key: 'name', header: 'Name', render: (r) => <>{r.name} {r.isHeadOffice && <Badge tone="brand">Head office</Badge>}</> }, { key: 'defaultShiftId', header: 'Schedule', render: (r) => shiftOpts.find((o) => o.value === r.defaultShiftId)?.label ?? 'Company default' }, { key: 'address', header: 'Address' }]} />}
       {tab === 'departments' && <SimpleCrud path="/departments" perm="departments" listQ="?pageSize=100&sort=name&order=asc" fields={[{ name: 'code', label: 'Code', required: true }, { name: 'name', label: 'Name', required: true }]} columns={[{ key: 'code', header: 'Code' }, { key: 'name', header: 'Name' }]} />}
       {tab === 'designations' && <SimpleCrud path="/designations" perm="departments" fields={[{ name: 'name', label: 'Name', required: true }, { name: 'level', label: 'Level (for ordering)', type: 'number' }]} columns={[{ key: 'name', header: 'Name' }, { key: 'level', header: 'Level' }]} />}
-      {tab === 'shifts' && <SimpleCrud path="/shifts" perm="shifts" noDelete fields={[{ name: 'name', label: 'Name', required: true }, { name: 'startTime', label: 'Start (HH:MM)', required: true }, { name: 'endTime', label: 'End (HH:MM)', required: true }, { name: 'breakMinutes', label: 'Break (minutes)', type: 'number' }, { name: 'graceMinutes', label: 'Grace (minutes)', type: 'number' }, { name: 'weeklyOffs', label: 'Weekly offs (e.g. SAT)', type: 'tags' }, { name: 'isDefault', type: 'checkbox', checkLabel: 'Default shift for employees without one' }]}
-        columns={[{ key: 'name', header: 'Shift', render: (r) => <>{r.name} {r.isDefault && <Badge tone="brand">Default</Badge>}</> }, { key: 't', header: 'Hours', render: (r) => `${r.startTime.slice(0, 5)}–${r.endTime.slice(0, 5)}` }, { key: 'breakMinutes', header: 'Break' }, { key: 'weeklyOffs', header: 'Weekly off', render: (r) => r.weeklyOffs.join(', ') }]} />}
+      {tab === 'shifts' && <SimpleCrud path="/shifts" perm="shifts" noDelete fields={[{ name: 'name', label: 'Name', required: true }, { name: 'startTime', label: 'Start (HH:MM)', required: true }, { name: 'endTime', label: 'End (HH:MM)', required: true }, { name: 'breakMinutes', label: 'Break (minutes)', type: 'number' }, { name: 'graceMinutes', label: 'Grace (minutes)', type: 'number' }, { name: 'weeklyOffs', label: 'Weekly offs (e.g. SAT)', type: 'tags' }, { name: 'dayHours', label: 'Different hours on some days', hint: 'e.g. FRI 10:00-15:00, SUN 10:00-16:00', span: 2 }, { name: 'isDefault', type: 'checkbox', checkLabel: 'Default shift for employees without one' }]}
+        toForm={(r) => ({ ...r, dayHours: toText(r.dayHours) })} transform={(b) => ({ ...b, ...('dayHours' in b && { dayHours: fromText(b.dayHours) }) })}
+        columns={[{ key: 'name', header: 'Shift', render: (r) => <>{r.name} {r.isDefault && <Badge tone="brand">Default</Badge>}</> }, { key: 't', header: 'Hours', render: (r) => `${r.startTime.slice(0, 5)}–${r.endTime.slice(0, 5)}` }, { key: 'breakMinutes', header: 'Break' }, { key: 'weeklyOffs', header: 'Weekly off', render: (r) => r.weeklyOffs.join(', ') }, { key: 'dayHours', header: 'Special hours', render: (r) => toText(r.dayHours) || '—' }]} />}
     </>
   );
 }
 
-function SimpleCrud({ path, perm, fields, columns, listQ = '', noDelete }) {
+function SimpleCrud({ path, perm, fields, columns, listQ = '', noDelete, transform = (b) => b, toForm = (r) => r }) {
   const a = useAuth();
   const { data, isPending } = useQuery({ queryKey: [path], queryFn: () => api.get(`${path}${listQ}`) });
   const [edit, setEdit] = useState(null);
@@ -276,7 +299,7 @@ function SimpleCrud({ path, perm, fields, columns, listQ = '', noDelete }) {
       {a.can(`${perm}:create`) && <div className="mb-3 flex justify-end"><Button onClick={() => setEdit({})}>Add</Button></div>}
       <DataTable loading={isPending} rows={data ?? []} onRowClick={a.can(`${perm}:edit`) ? setEdit : undefined}
         columns={[...columns, ...(!noDelete && a.can(`${perm}:delete`) ? [{ key: 'x', header: '', render: (r) => !r.isHeadOffice && <Button size="sm" variant="ghost" onClick={(e) => { e.stopPropagation(); setDel(r); }}>Delete</Button> }] : [])]} />
-      {edit && <FormDialog open onClose={() => setEdit(null)} title={edit.id ? 'Edit' : 'Add'} initial={{ ...edit, ...(edit.startTime && { startTime: edit.startTime.slice(0, 5), endTime: edit.endTime.slice(0, 5) }) }} fields={fields} loading={save.isPending} error={save.error} onSubmit={(b) => save.mutate(Object.fromEntries(Object.entries(b).filter(([k]) => fields.some((f) => f.name === k))))} />}
+      {edit && <FormDialog open onClose={() => setEdit(null)} title={edit.id ? 'Edit' : 'Add'} initial={{ ...toForm(edit), ...(edit.startTime && { startTime: edit.startTime.slice(0, 5), endTime: edit.endTime.slice(0, 5) }) }} fields={fields} loading={save.isPending} error={save.error} onSubmit={(b) => save.mutate(transform(Object.fromEntries(Object.entries(b).filter(([k]) => fields.some((f) => f.name === k)))))} />}
       <ConfirmDialog open={!!del} onCancel={() => setDel(null)} onConfirm={() => remove.mutate(del.id)} loading={remove.isPending} title={`Delete ${del?.name}?`} description="Records that still use it must be moved first." confirmLabel="Delete" destructive />
     </>
   );

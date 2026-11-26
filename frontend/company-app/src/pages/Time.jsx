@@ -176,6 +176,13 @@ function Policy() {
         <Field label="Radius (metres)"><Input type="number" value={p.geofence.radiusM} onChange={(e) => set('geofence', { ...p.geofence, radiusM: Number(e.target.value) })} /></Field>
         <Button variant="ghost" onClick={async () => { const pos = await getPosition(); if (pos.lat) set('geofence', { ...p.geofence, lat: pos.lat, lng: pos.lng }); }}>Use my current location</Button>
       </>}
+      <div className="sm:col-span-3 border-t border-line pt-4"><p className="font-medium">Lateness, early leave and alerts</p><p className="text-xs text-ink-500">Deductions apply only if switched on here. Every deduction shows on the payslip with the rule that caused it.</p></div>
+      <div className="space-y-2"><Checkbox label="Deduct pay for repeated late arrivals" checked={!!p.lateRule?.enabled} onChange={(e) => set('lateRule', { ...p.lateRule, enabled: e.target.checked })} /><Checkbox label="Count early departures as late" checked={!!p.earlyLeaveCountsAsLate} onChange={(e) => set('earlyLeaveCountsAsLate', e.target.checked)} /></div>
+      <Field label="Every … late days"><Input type="number" min="1" value={p.lateRule?.everyLateDays ?? 3} disabled={!p.lateRule?.enabled} onChange={(e) => set('lateRule', { ...p.lateRule, everyLateDays: Number(e.target.value) })} /></Field>
+      <Field label="… count as unpaid days" hint="0.5 = half a day"><Input type="number" step="0.5" min="0" value={p.lateRule?.deductDays ?? 0.5} disabled={!p.lateRule?.enabled} onChange={(e) => set('lateRule', { ...p.lateRule, deductDays: Number(e.target.value) })} /></Field>
+      <Field label="Early leave allowed (minutes)">{num('earlyLeaveGraceMinutes')}</Field>
+      <Field label="Alert manager after … late days in a month" hint="0 = off">{num('repeatedLateThreshold')}</Field>
+      <div className="space-y-2 pt-6"><Checkbox label="Tell employees when they arrive late" checked={p.notifyLate !== false} onChange={(e) => set('notifyLate', e.target.checked)} /><Checkbox label="Remind about missing check-in/out" checked={p.notifyMissingPunch !== false} onChange={(e) => set('notifyMissingPunch', e.target.checked)} /></div>
       <div className="sm:col-span-3"><Button loading={save.isPending} onClick={() => save.mutate(p)}>Save rules</Button>{save.error && <p className="mt-2 text-sm text-danger-600">{save.error.message}</p>}</div>
     </CardBody></Card>
   );
@@ -259,7 +266,7 @@ export function LeaveSetup() {
           { name: 'isPaid', type: 'checkbox', checkLabel: 'Paid leave' }, { name: 'allowHalfDay', type: 'checkbox', checkLabel: 'Allow half days' }, { name: 'encashable', type: 'checkbox', checkLabel: 'Encashable' }, { name: 'isActive', type: 'checkbox', checkLabel: 'Active' }]}
         loading={saveType.isPending} error={saveType.error}
         onSubmit={(b) => saveType.mutate({ ...b, approvalLevels: Number(b.approvalLevels ?? 1), appliesToGender: b.appliesToGender || null, isPaid: !!b.isPaid, allowHalfDay: !!b.allowHalfDay, encashable: !!b.encashable, isActive: !!b.isActive, ...(b.annualQuota != null && { annualQuota: Number(b.annualQuota) }), ...(b.carryForwardMax != null && { carryForwardMax: Number(b.carryForwardMax) }) })} />}
-      <FormDialog open={hol} onClose={() => setHol(false)} title="Add holiday" fields={[{ name: 'date', label: 'Date (AD)', type: 'date', required: true }, { name: 'name', label: 'Name', required: true }, { name: 'isOptional', type: 'checkbox', checkLabel: 'Optional holiday' }]}
+      <FormDialog open={hol} onClose={() => setHol(false)} title="Add holiday" initial={{ kind: 'HOLIDAY' }} fields={[{ name: 'date', label: 'Date (AD)', type: 'date', required: true }, { name: 'name', label: 'Name', required: true }, { name: 'kind', label: 'Type', type: 'select', options: [{ value: 'HOLIDAY', label: 'Holiday (office closed)' }, { value: 'WORKING_DAY', label: 'Special working day (e.g. a make-up Saturday)' }] }, { name: 'isOptional', type: 'checkbox', checkLabel: 'Optional holiday' }]}
         loading={addHol.isPending} error={addHol.error} onSubmit={(b) => addHol.mutate({ ...b, date: String(b.date).slice(0, 10), isOptional: !!b.isOptional })} />
     </>
   );
