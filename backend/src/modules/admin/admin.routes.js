@@ -67,7 +67,9 @@ adminRouter.get('/tenants/:id', can('tenants:view'), validate(tenantParam), asyn
   const ctx = await subs.getTenantContext(tenant.id, { fresh: true });
   const usage = await withTenant(tenant.id, (t) => subs.getUsage(t));
   const history = await sys.SubscriptionEvent.findAll({ where: { tenantId: tenant.id }, order: [['createdAt', 'DESC']], limit: 50 });
-  return ok(res, { tenant, subscription: ctx.subscription, access: subs.evaluateAccess(ctx), features: ctx.features, limits: ctx.limits, usage, history });
+  const featureOverrides = await sys.TenantFeatureOverride.findAll({ where: { tenantId: tenant.id } });
+  const requests = await sys.SubscriptionRequest.findAll({ where: { tenantId: tenant.id }, order: [['createdAt', 'DESC']], limit: 10, include: [{ model: sys.Plan, as: 'plan', attributes: ['code', 'name'] }] });
+  return ok(res, { tenant, subscription: ctx.subscription, access: subs.evaluateAccess(ctx), features: ctx.features, featureOverrides, limits: ctx.limits, usage, history, requests });
 }));
 
 const statusBody = z.object({ reason: z.string().trim().min(3).max(500) }).strict();
@@ -119,6 +121,16 @@ adminRouter.post('/tenants/:id/subscription/modules', can('subscriptions:manage'
 }), asyncHandler(async (req, res) => {
   const item = await subs.addAddonModule({ tenantId: req.params.id, ...req.body, actor: platformActor(req), req });
   return created(res, item);
+}));
+
+/** Switch one feature on/off for this company regardless of plan; enabled: null clears the switch. */
+adminRouter.put('/tenants/:id/features/:featureKey', can('subscriptions:manage'), validate({
+  params: z.object({ id: z.string().uuid(), featureKey: z.string().regex(/^[a-z_]+$/) }),
+  body: z.object({ enabled: z.boolean().nullable(), reason: z.string().trim().max(500).optional() }).strict(),
+}), asyncHandler(async (req, res) => {
+  await subs.setFeatureOverride({ tenantId: req.params.id, featureKey: req.params.featureKey, ...req.body, actor: platformActor(req), req });
+  const ctx = await subs.getTenantContext(req.params.id, { fresh: true });
+  return ok(res, { features: ctx.features });
 }));
 
 /** Manual payment verification (bank transfer etc.) — starts a new paid period. */

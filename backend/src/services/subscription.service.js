@@ -56,7 +56,11 @@ export async function getTenantContext(tenantId, { fresh = false } = {}) {
       { replacements: { planId: sub.planId }, type: QueryTypes.SELECT },
     );
     const addons = sub.items.filter((i) => i.type === 'ADDON_MODULE').map((i) => i.featureKey);
-    features = [...new Set([...rows.map((r) => r.key), ...addons])].sort();
+    // Super Admin per-company switches win over the plan: enabled adds, disabled removes.
+    const overrides = await sys.TenantFeatureOverride.findAll({ where: { tenantId } });
+    const off = new Set(overrides.filter((o) => !o.enabled).map((o) => o.featureKey));
+    const on = overrides.filter((o) => o.enabled).map((o) => o.featureKey);
+    features = [...new Set([...rows.map((r) => r.key), ...addons, ...on])].filter((k) => !off.has(k)).sort();
 
     const extra = (type) => sub.items.filter((i) => i.type === type).reduce((n, i) => n + i.quantity, 0);
     const lim = (override, base, type) => {
@@ -207,14 +211,15 @@ async function liveSubscription(tenantId, transaction) {
 }
 
 /** Super Admin: change plan immediately (proration/invoicing arrives with billing in Phase 2). */
-export async function changePlan({ tenantId, planCode, billingCycle, actor, req }) {
+export async function changePlan({ tenantId, planCode, billingCycle, customAmount, actor, req }) {
   const result = await systemDb.transaction(async (transaction) => {
     const sub = await liveSubscription(tenantId, transaction);
     const plan = await sys.Plan.findOne({ where: { code: planCode, status: 'ACTIVE' }, transaction });
     if (!plan) throw NotFound('Plan');
-    if (plan.id === sub.planId && (!billingCycle || billingCycle === sub.billingCycle)) throw Conflict('Tenant is already on this plan');
+    if (plan.id === sub.planId && (!billingCycle || billingCycle === sub.billingCycle) && customAmount == null) throw Conflict('Tenant is already on this plan');
     const cycle = billingCycle ?? sub.billingCycle;
-    const amount = await currentPrice(plan.id, cycle, sub.currency, new Date(), transaction);
+    // Negotiated (Enterprise) price, else the plan's list price.
+    const amount = customAmount ?? await currentPrice(plan.id, cycle, sub.currency, new Date(), transaction);
     if (amount == null && !plan.isCustom) throw BadRequest(`Plan ${plan.code} has no ${cycle} price configured`);
     const before = sub.toJSON();
     await sub.update({ previousPlanId: sub.planId, planId: plan.id, billingCycle: cycle, amount: amount ?? sub.amount, pendingPlanId: null }, { transaction });
@@ -224,6 +229,20 @@ export async function changePlan({ tenantId, planCode, billingCycle, actor, req 
   });
   await invalidateTenantContext(tenantId);
   return result;
+}
+
+/** Super Admin: switch one feature on/off for one company, or clear the switch (enabled = null → follow the plan). */
+export async function setFeatureOverride({ tenantId, featureKey, enabled, reason, actor, req }) {
+  await systemDb.transaction(async (transaction) => {
+    const feature = await sys.FeatureCatalog.findOne({ where: { key: featureKey }, transaction });
+    if (!feature) throw NotFound('Feature');
+    if (feature.isCore && enabled === false) throw BadRequest('Core features cannot be switched off');
+    const before = await sys.TenantFeatureOverride.findOne({ where: { tenantId, featureKey }, transaction });
+    if (enabled === null) await sys.TenantFeatureOverride.destroy({ where: { tenantId, featureKey }, transaction });
+    else await sys.TenantFeatureOverride.upsert({ tenantId, featureKey, enabled, reason: reason ?? null, updatedBy: actor.id ?? null, updatedAt: new Date() }, { transaction });
+    await audit({ transaction, tenantId, actor, action: 'subscription.feature_override', entityType: 'feature', before: before?.toJSON() ?? null, after: { featureKey, enabled, reason }, req });
+  });
+  await invalidateTenantContext(tenantId);
 }
 
 /** Super Admin: negotiated limit overrides (null = use plan default). */

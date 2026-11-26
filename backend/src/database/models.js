@@ -267,6 +267,16 @@ export function defineModels(sequelize) {
 
   Plan.hasMany(PlanPrice, { foreignKey: 'planId', as: 'prices' });
   Plan.hasMany(PlanEntitlement, { foreignKey: 'planId', as: 'entitlements' });
+  const SubscriptionRequest = sequelize.define('SubscriptionRequest', {
+    id, tenantId, kind: S, planId: U, billingCycle: S, employeeCount: I, features: DataTypes.ARRAY(DataTypes.TEXT), message: T,
+    status: S, requestedBy: U, decidedBy: U, decidedAt: D, decisionNote: T, decision: J, invoiceId: U,
+  }, opts('subscription_requests'));
+  const TenantFeatureOverride = sequelize.define('TenantFeatureOverride', {
+    tenantId: { type: DataTypes.UUID, primaryKey: true }, featureKey: { type: S, primaryKey: true }, enabled: B, reason: T, updatedBy: U,
+  }, opts('tenant_feature_overrides', { createdAt: false }));
+  SubscriptionRequest.belongsTo(Plan, { foreignKey: 'planId', as: 'plan' });
+  SubscriptionRequest.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
+
   PlanEntitlement.belongsTo(FeatureCatalog, { foreignKey: 'featureId', as: 'feature' });
   Subscription.belongsTo(Plan, { foreignKey: 'planId', as: 'plan' });
   Subscription.hasMany(SubscriptionItem, { foreignKey: 'subscriptionId', as: 'items' });
@@ -285,6 +295,7 @@ export function defineModels(sequelize) {
   SupportTicket.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
 
   return {
+    SubscriptionRequest, TenantFeatureOverride,
     TaxRuleSet, SalaryComponent, EmployeeSalary, PayrollRun, PayrollItem, PayrollAdjustment,
     Designation, Shift, EmployeeHistory, File, AttendanceRecord, AttendanceCorrection, Holiday, LeaveType, LeaveTransaction,
     LeaveRequest, LeaveApproval, Announcement, Notification,

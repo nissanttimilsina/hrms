@@ -39,7 +39,7 @@ function useAction(fn, { success, invalidate = [], onDone } = {}) {
 
 // --------------------------------------------------------------------------- generic form dialog
 /**
- * fields: [{ name, label, type: text|number|email|password|textarea|select|checkbox|date|datetime|json|tags, options, required, hint, span }]
+ * fields: [{ name, label, type: text|number|email|password|textarea|select|checkbox|multiselect|date|datetime|json|tags, options, required, hint, span }]
  */
 export function FormDialog({ open, onClose, title, description, fields, initial = {}, onSubmit, submitLabel = 'Save', loading, error }) {
   const [v, setV] = useState(initial);
@@ -69,8 +69,12 @@ export function FormDialog({ open, onClose, title, description, fields, initial 
             : f.type === 'json' ? <Textarea rows={5} className="font-mono text-xs" value={typeof val === 'string' ? val : JSON.stringify(val, null, 2)} onChange={(e) => set(e.target.value)} />
               : f.type === 'select' ? <Select value={val} onChange={(e) => set(e.target.value)} options={f.options} placeholder={f.placeholder} />
                 : f.type === 'checkbox' ? <Checkbox label={f.checkLabel ?? f.label} checked={!!val} onChange={(e) => set(e.target.checked)} />
+                  : f.type === 'multiselect' ? (
+                    <div className="grid max-h-56 gap-1 overflow-auto rounded-md border border-line p-2 sm:grid-cols-2" role="group" aria-label={f.label}>
+                      {f.options.map((o) => <Checkbox key={o.value} label={o.label} checked={(val || []).includes(o.value)} onChange={(e) => set(e.target.checked ? [...(val || []), o.value] : (val || []).filter((x) => x !== o.value))} />)}
+                    </div>)
                   : <Input type={f.type === 'datetime' ? 'datetime-local' : f.type ?? 'text'} value={f.type === 'tags' && Array.isArray(val) ? val.join(', ') : val} onChange={(e) => set(e.target.value)} />;
-          return <Field key={f.name} label={f.type === 'checkbox' ? undefined : f.label} required={f.required} hint={f.hint} error={errs[f.name]} className={cn(f.span !== 1 && (f.type === 'textarea' || f.type === 'json' || f.span === 2) && 'sm:col-span-2')}>{ctl}</Field>;
+          return <Field key={f.name} label={f.type === 'checkbox' ? undefined : f.label} required={f.required} hint={f.hint} error={errs[f.name]} className={cn(f.span !== 1 && (f.type === 'textarea' || f.type === 'json' || f.type === 'multiselect' || f.span === 2) && 'sm:col-span-2')}>{ctl}</Field>;
         })}
         <div className="flex justify-end gap-2 sm:col-span-2">
           <Button variant="secondary" onClick={onClose}>Cancel</Button>

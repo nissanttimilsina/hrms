@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ResponsiveContainer, AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, PieChart, Pie, Cell, Legend } from 'recharts';
 import { Button, Card, CardBody, CardHeader, DataTable, Field, Input, Select, Skeleton, Stat, UsageMeter, ConfirmDialog, Checkbox, EmptyState } from '@hrms/shared-ui';
 import { api, useAuth, useList, useAction, FormDialog, PageHeader, StatusBadge, Filters, KV, npr, dt } from '../lib.jsx';
+import { FeatureSwitches } from './Requests.jsx';
 
 const BRAND = ['#2453d6', '#3a6ff2', '#7fa3f7', '#bfd5fe', '#0f8a4f', '#c2560c'];
 
@@ -40,7 +41,7 @@ export function Dashboard() {
   const tiles = [
     ['MRR', npr(k.mrr)], ['ARR', npr(k.arr)], ['Revenue (period)', npr(k.revenue)], ['Outstanding', npr(k.outstanding)],
     ['Companies', k.tenants], ['Active', k.activeTenants], ['On trial', k.trialTenants], ['Paying', k.payingTenants],
-    ['Suspended', k.suspendedTenants], ['Expiring ≤14d', k.expiringSoon], ['Payments to verify', k.pendingPayments], ['Employees on platform', k.employees],
+    ['Suspended', k.suspendedTenants], ['Expiring ≤14d', k.expiringSoon], ['Requests to review', k.pendingRequests], ['Payments to verify', k.pendingPayments], ['Employees on platform', k.employees],
     ['New subscriptions', k.newSubscriptions], ['Cancellations', k.cancellations], ['Leads', k.leads], ['Lead conversion', k.conversionRate != null ? `${k.conversionRate}%` : '—'],
   ];
   const chart = (title, data, key, type = 'area', fmt) => (
@@ -153,7 +154,7 @@ export function TenantDetail() {
   const addon = act((b) => api.post(`/tenants/${id}/subscription/modules`, b), 'Module enabled');
   const paid = act(() => api.post(`/tenants/${id}/subscription/activate`), 'New paid period started');
   if (isPending) return <Skeleton className="h-96" />;
-  const { tenant: t, subscription: s, access, usage, limits: lim, history, features: feats } = d;
+  const { tenant: t, subscription: s, access, usage, limits: lim, history, features: feats, featureOverrides, requests } = d;
   return (
     <>
       <PageHeader title={t.name} description={`${t.domains.map((x) => x.hostname).join(', ')}`} actions={can('tenants:manage') && (
@@ -179,8 +180,11 @@ export function TenantDetail() {
         </CardBody></Card>
       </div>
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <Card><CardHeader title="Enabled modules" /><CardBody className="flex flex-wrap gap-1.5">{feats.map((f) => <span key={f} className="rounded bg-subtle px-2 py-0.5 text-xs">{f}</span>)}</CardBody></Card>
-        <Card><CardHeader title="Subscription history" /><CardBody className="max-h-72 space-y-2 overflow-auto text-sm">
+        <FeatureSwitches tenantId={id} effective={feats} overrides={featureOverrides} />
+        <Card><CardHeader title="Requests & history" /><CardBody className="max-h-72 space-y-2 overflow-auto text-sm">
+          {requests.length > 0 && <p className="font-medium">Requests</p>}
+          {requests.map((r) => <div key={r.id} className="flex justify-between gap-2"><span>{r.plan?.name ?? r.features.join(', ')} <StatusBadge value={r.status} /></span><span className="shrink-0 text-ink-400">{dt(r.createdAt, true)}</span></div>)}
+          {requests.length > 0 && <p className="pt-2 font-medium">Subscription events</p>}
           {history.map((h) => <div key={h.id} className="flex justify-between gap-2"><span>{h.type.replace(/_/g, ' ')}{h.toStatus && <> → <StatusBadge value={h.toStatus} /></>}</span><span className="shrink-0 text-ink-400">{dt(h.createdAt, true)}</span></div>)}
         </CardBody></Card>
       </div>

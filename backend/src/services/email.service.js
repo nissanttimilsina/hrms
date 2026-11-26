@@ -29,6 +29,7 @@ export const TEMPLATES = {
   'lead.acknowledgement': (d) => ({ subject: d.source === 'DEMO' ? 'Your demo request has been received' : 'Thanks for contacting Lishnu HRMS', lines: [`Hi ${d.name}, thanks for reaching out. Our team will contact you within one business day.`] }),
   'support.reply': (d) => ({ subject: `[Ticket #${d.number}] ${d.subject}`, lines: ['Our support team replied to your ticket:', d.body], cta: d.url ? link(d.url, 'View ticket') : undefined }),
   'support.new_ticket': (d) => ({ subject: `New ${d.priority} ticket #${d.number}: ${d.subject}`, lines: [`From ${d.tenant}`], cta: link(`${env.ADMIN_URL}/support/${d.id}`, 'Open ticket') }),
+  'platform.subscription_request': (d) => ({ subject: `Subscription request: ${d.company}`, lines: [`${d.company} (${d.slug}) requested: ${d.request}.`, d.employees ? `Employees: ${d.employees}` : '', d.message ? `Message: ${d.message}` : ''], cta: link(d.url, 'Review request') }),
   'notification.generic': (d) => ({ subject: d.title, lines: [d.body], cta: d.url ? link(d.url, d.cta || 'Open') : undefined }),
 };
 

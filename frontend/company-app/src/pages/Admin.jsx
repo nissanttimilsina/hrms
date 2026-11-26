@@ -115,6 +115,10 @@ export function Billing() {
   const [preview, setPreview] = useState(null);
   const [pay, setPay] = useState(null);
   const [profile, setProfile] = useState(false);
+  const [reqDlg, setReqDlg] = useState(null);
+  const { data: requests, refetch: refetchReq } = useQuery({ queryKey: ['sub-requests'], queryFn: () => api.get('/billing/requests') });
+  const sendReq = useAction((x) => api.post('/billing/requests', x), { success: 'Request sent', onDone: () => { setReqDlg(null); refetchReq(); } });
+  const cancelReq = useAction((id) => api.post(`/billing/requests/${id}/cancel`, {}), { success: 'Request cancelled', onDone: () => refetchReq() });
   useEffect(() => {
     const p = params.get('payment');
     if (!p) return;
@@ -137,6 +141,10 @@ export function Billing() {
   const usage = a.me.subscription.usage;
   const lim = a.me.subscription.limits;
   const manage = a.can('subscription:manage');
+  const open = (requests ?? []).find((r) => r.status === 'PENDING');
+  const decided = (requests ?? []).find((r) => ['APPROVED', 'REJECTED'].includes(r.status));
+  const allFeatures = [...new Map(b.plans.flatMap((p) => p.features).map((f) => [f.key, f])).values()];
+  const missing = allFeatures.filter((f) => !a.feature(f.key));
   return (
     <>
       <PageHeader title="Subscription" description={`${s.planName} · ${s.billingCycle.toLowerCase()} · ${s.status === 'TRIAL' ? `trial ends ${dt(s.trialEndsAt)}` : `renews ${dt(s.currentPeriodEnd)}`}`} actions={manage && <Button variant="secondary" onClick={() => setProfile(true)}>Billing details</Button>} />
@@ -147,6 +155,13 @@ export function Billing() {
         </CardBody></Card>
         <Card><CardHeader title="Usage" /><CardBody className="space-y-4"><UsageMeter label="Employees" used={usage.employees} limit={lim.employees} /><UsageMeter label="Branches" used={usage.branches} limit={lim.branches} /><UsageMeter label="Storage (MB)" used={usage.storageMb} limit={lim.storageMb} /></CardBody></Card>
       </div>
+      {open && (
+        <Card className="mt-4 border-brand-200 bg-brand-50"><CardBody className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm"><strong>Request under review:</strong> {open.plan ? `${open.plan.name} plan` : `Modules: ${open.features.join(', ')}`}, sent {dt(open.createdAt)}. We'll notify you when it's decided.</p>
+          {manage && <Button size="sm" variant="secondary" loading={cancelReq.isPending} onClick={() => cancelReq.mutate(open.id)}>Cancel request</Button>}
+        </CardBody></Card>
+      )}
+      {!open && decided?.status === 'REJECTED' && <p className="mt-4 text-sm text-ink-600">Your last request ({dt(decided.decidedAt)}) was not approved{decided.decisionNote ? `: ${decided.decisionNote}` : '.'}</p>}
       {b.openInvoices.length > 0 && manage && (
         <Card className="mt-4 border-warning-600/40"><CardBody className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm"><strong>Invoice {b.openInvoices[0].number}</strong> for {npr(b.openInvoices[0].total)} is due {dt(b.openInvoices[0].dueAt)}.</p>
@@ -155,7 +170,7 @@ export function Billing() {
       )}
       {manage && (
         <>
-          <div className="mb-3 mt-8 flex items-end justify-between"><h2 className="font-semibold">Change plan</h2>
+          <div className="mb-3 mt-8 flex items-end justify-between"><div><h2 className="font-semibold">Change plan</h2><p className="text-xs text-ink-500">Pay online to switch instantly, or send a request and our team will review it.</p></div>
             <div className="w-36 shrink-0"><Select value={cycle} onChange={(e) => setCycle(e.target.value)} aria-label="Billing cycle" options={[{ value: 'MONTHLY', label: 'Monthly' }, { value: 'ANNUAL', label: 'Annual' }]} /></div></div>
           <div className="grid gap-3 md:grid-cols-4">
             {b.plans.map((p) => {
@@ -165,15 +180,28 @@ export function Billing() {
                 <Card key={p.code} className={current ? 'ring-2 ring-brand-500' : ''}><CardBody>
                   <p className="font-semibold">{p.name}</p><p className="text-xs text-ink-500">{p.limits.employees ? `Up to ${p.limits.employees} employees` : 'Custom capacity'}</p>
                   <p className="mt-2 text-xl font-semibold">{p.contactSales ? 'Custom' : npr(price)}</p>{!p.contactSales && <p className="text-xs text-ink-400">per {cycle === 'ANNUAL' ? 'year' : 'month'} + VAT</p>}
-                  <Button size="sm" className="mt-3 w-full" variant={current ? 'secondary' : 'primary'} disabled={p.contactSales}
-                    onClick={async () => { try { setPreview({ plan: p, ...(await api.post('/billing/preview', { planCode: p.code, billingCycle: cycle })) }); } catch (e) { toast.error('Not available', e.message); } }}>
-                    {p.contactSales ? 'Contact sales' : current ? 'Renew' : 'Choose'}
-                  </Button>
+                  {p.contactSales ? (
+                    <Button size="sm" className="mt-3 w-full" disabled={!!open} onClick={() => setReqDlg({ plan: p })}>Request Enterprise</Button>
+                  ) : (
+                    <>
+                      <Button size="sm" className="mt-3 w-full" variant={current ? 'secondary' : 'primary'}
+                        onClick={async () => { try { setPreview({ plan: p, ...(await api.post('/billing/preview', { planCode: p.code, billingCycle: cycle })) }); } catch (e) { toast.error('Not available', e.message); } }}>
+                        {current ? 'Renew' : 'Choose'}
+                      </Button>
+                      {!current && <button type="button" disabled={!!open} className="mt-2 w-full text-xs text-brand-700 hover:underline disabled:text-ink-400 disabled:no-underline" onClick={() => setReqDlg({ plan: p })}>or request approval</button>}
+                    </>
+                  )}
                 </CardBody></Card>
               );
             })}
           </div>
         </>
+      )}
+      {manage && missing.length > 0 && (
+        <Card className="mt-4"><CardBody className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-sm">Need a module that isn't in your plan, such as {missing.slice(0, 3).map((f) => f.name).join(', ')}?</p>
+          <Button size="sm" variant="secondary" disabled={!!open} onClick={() => setReqDlg({ modules: true })}>Request modules</Button>
+        </CardBody></Card>
       )}
       <h2 className="mb-3 mt-8 font-semibold">Invoices</h2>
       <DataTable rows={invoices ?? []} empty={<EmptyState title="No invoices yet" />} columns={[
@@ -186,6 +214,19 @@ export function Billing() {
           description={preview.kind === 'DOWNGRADE' ? `Your plan changes at renewal on ${dt(preview.effectiveAt)}. No charge now.` : `${preview.description}. Subtotal ${npr(preview.subtotal)} + VAT ${npr(preview.tax)} = ${npr(preview.total)}.`}
           fields={preview.kind === 'DOWNGRADE' ? [] : [{ name: 'couponCode', label: 'Promo code (optional)' }]} loading={checkout.isPending} error={checkout.error}
           onSubmit={(x) => checkout.mutate({ planCode: preview.plan.code, billingCycle: cycle, ...(x.couponCode && { couponCode: x.couponCode.toUpperCase() }) })} />
+      )}
+      {reqDlg && (
+        <FormDialog open onClose={() => setReqDlg(null)} submitLabel="Send request"
+          title={reqDlg.modules ? 'Request modules' : `Request the ${reqDlg.plan.name} plan`}
+          description={reqDlg.plan?.contactSales ? 'Tell us about your organisation. We will reply with a tailored quote and plan.' : 'Our team reviews requests within one business day. Once approved you receive an invoice, or the plan is switched on directly.'}
+          initial={{ billingCycle: cycle, employeeCount: usage.employees || '' }}
+          fields={[
+            ...(reqDlg.modules ? [{ name: 'features', label: 'Modules', type: 'multiselect', options: missing.map((f) => ({ value: f.key, label: f.name })), required: true }]
+              : [{ name: 'billingCycle', label: 'Billing cycle', type: 'select', options: [{ value: 'MONTHLY', label: 'Monthly' }, { value: 'ANNUAL', label: 'Annual' }] }, { name: 'employeeCount', label: 'Employees', type: 'number' }]),
+            { name: 'message', label: 'Message (optional)', type: 'textarea', rows: 3 },
+          ]}
+          loading={sendReq.isPending} error={sendReq.error}
+          onSubmit={(x) => sendReq.mutate({ ...(reqDlg.plan && { planCode: reqDlg.plan.code, billingCycle: x.billingCycle }), ...(x.employeeCount && { employeeCount: Number(x.employeeCount) }), features: reqDlg.modules ? x.features : [], ...(x.message && { message: x.message }) })} />
       )}
       {pay && <PayDialog invoice={pay} providers={b.providers} bankAccounts={b.bankAccounts} onClose={() => setPay(null)} onPay={(x) => start.mutate({ id: pay.id, ...x })} loading={start.isPending} error={start.error} />}
       <FormDialog open={profile} onClose={() => setProfile(false)} title="Billing details" description="Printed on your invoices." initial={b.profile}

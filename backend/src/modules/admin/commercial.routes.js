@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { listRequests, approveRequest, rejectRequest, pendingCount } from '../../services/subscription-requests.service.js';
 import { z } from 'zod';
 import { Op, QueryTypes } from 'sequelize';
 import { sys, systemDb } from '../../database/index.js';
@@ -81,7 +82,7 @@ commercialAdminRouter.get('/dashboard', can('tenants:view'), validate({
       trialTenants: subs.trial, payingTenants: subs.paying, atRisk: subs.at_risk, expiringSoon: subs.expiring,
       mrr: Math.round(subs.mrr * 100) / 100, arr: Math.round(subs.mrr * 1200) / 100, newSubscriptions: subs.new_subscriptions,
       cancellations: churn.cancellations, revenue: money.revenue, outstanding: money.outstanding, openInvoices: money.open_invoices,
-      pendingPayments: pay.pending_verification, leads: leads.total, openLeads: leads.open,
+      pendingPayments: pay.pending_verification, pendingRequests: await pendingCount(), leads: leads.total, openLeads: leads.open,
       conversionRate: leads.total ? Math.round((leads.won / leads.total) * 1000) / 10 : 0, employees: emp.employees,
     },
     charts: { revenueByMonth, tenantGrowth, churnByMonth, employeeGrowth, leadSources, planDistribution, moduleUsage },
@@ -387,3 +388,29 @@ commercialAdminRouter.patch('/staff/:id', can('platform_users:manage'), validate
     if (req.body.status === 'DISABLED') await revokeAllForUser({ subjectType: 'PLATFORM', userId: u.id, reason: 'disabled' });
     return ok(res, { updated: true });
   }));
+
+// =========================================================================== subscription requests
+commercialAdminRouter.get('/subscription-requests', can('subscriptions:view'), validate({
+  query: z.object({ status: z.enum(['PENDING', 'APPROVED', 'REJECTED', 'CANCELLED']).optional(), page: z.coerce.number().int().min(1).default(1), pageSize: z.coerce.number().int().min(1).max(100).default(25) }),
+}), asyncHandler(async (req, res) => {
+  const { rows, meta } = await listRequests(req.query);
+  return ok(res, rows, meta);
+}));
+
+commercialAdminRouter.post('/subscription-requests/:id/approve', can('subscriptions:manage'), validate({
+  ...idParam,
+  body: z.object({
+    planCode: z.string().trim().toUpperCase().optional(),
+    billingCycle: z.enum(['MONTHLY', 'ANNUAL']).optional(),
+    mode: z.enum(['INVOICE', 'ACTIVATE']).default('INVOICE'),
+    customAmount: z.number().positive().max(100_000_000).optional(),
+    maxEmployees: z.number().int().min(0).nullable().optional(),
+    maxBranches: z.number().int().min(0).nullable().optional(),
+    features: z.record(z.string().regex(/^[a-z_]+$/), z.boolean().nullable()).default({}),
+    note: z.string().trim().max(1000).optional(),
+  }).strict(),
+}), asyncHandler(async (req, res) => ok(res, await approveRequest({ id: req.params.id, ...req.body, actor: platformActor(req), req }))));
+
+commercialAdminRouter.post('/subscription-requests/:id/reject', can('subscriptions:manage'), validate({
+  ...idParam, body: z.object({ reason: z.string().trim().min(5).max(1000) }).strict(),
+}), asyncHandler(async (req, res) => ok(res, await rejectRequest({ id: req.params.id, reason: req.body.reason, actor: platformActor(req), req }))));

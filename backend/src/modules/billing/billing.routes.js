@@ -13,6 +13,7 @@ import { getSetting } from '../../services/settings.service.js';
 import { audit, tenantActor } from '../../services/audit.service.js';
 import { asyncHandler, ok, created, listQuery, paginate, pageMeta } from '../../utils/http.js';
 import { NotFound } from '../../utils/errors.js';
+import { createRequest, cancelRequest } from '../../services/subscription-requests.service.js';
 import { logger } from '../../utils/logger.js';
 
 // =========================================================================== tenant billing (mounted with allowWhenReadOnly)
@@ -138,4 +139,27 @@ paymentReturnRouter.get('/khalti/return', asyncHandler(async (req, res) => {
     logger.warn({ err, query: req.query }, 'Khalti return rejected');
     return res.redirect(303, `${env.APP_URL}/billing?payment=failed`);
   }
+}));
+
+// ----------------------------------------------------------------------------- plan / Enterprise / module requests
+const requestBody = z.object({
+  planCode: z.string().trim().toUpperCase().optional(),
+  billingCycle: z.enum(['MONTHLY', 'ANNUAL']).optional(),
+  employeeCount: z.number().int().min(1).max(100000).optional(),
+  features: z.array(z.string().regex(/^[a-z_]+$/)).max(30).default([]),
+  message: z.string().trim().max(2000).optional(),
+}).strict().refine((b) => b.planCode || b.features.length, 'Choose a plan or at least one module');
+
+tenantBillingRouter.get('/requests', requirePermission('subscription:view'), asyncHandler(async (req, res) => {
+  const rows = await req.tx((t) => app.SubscriptionRequest.findAll({ order: [['createdAt', 'DESC']], limit: 20, include: [{ model: app.Plan, as: 'plan', attributes: ['code', 'name'] }], transaction: t }));
+  return ok(res, rows);
+}));
+
+tenantBillingRouter.post('/requests', requirePermission('subscription:manage'), validate({ body: requestBody }), asyncHandler(async (req, res) => {
+  const r = await createRequest({ tenantId: req.auth.tenantId, userId: req.auth.userId, ...req.body, actor: tenantActor(req), req });
+  return created(res, r);
+}));
+
+tenantBillingRouter.post('/requests/:id/cancel', requirePermission('subscription:manage'), validate({ params: z.object({ id: z.string().uuid() }) }), asyncHandler(async (req, res) => {
+  return ok(res, await cancelRequest({ tenantId: req.auth.tenantId, id: req.params.id, actor: tenantActor(req), req }));
 }));

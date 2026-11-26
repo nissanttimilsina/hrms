@@ -153,7 +153,8 @@ export async function markInvoicePaid({ paymentId, providerRef, providerData, ac
     const sub = await sys.Subscription.findByPk(invoice.subscriptionId, { transaction, lock: transaction.LOCK.UPDATE });
     const from = sub.status;
     const plan = await sys.Plan.findByPk(invoice.targetPlanId, { transaction });
-    const amount = await currentPrice(plan.id, invoice.targetCycle, 'NPR', now, transaction);
+    // Custom (Enterprise) plans have no list price: the invoiced subtotal is the negotiated amount.
+    const amount = (await currentPrice(plan.id, invoice.targetCycle, 'NPR', now, transaction)) ?? Number(invoice.subtotal);
     const patch = invoice.kind === 'UPGRADE'
       ? { previousPlanId: sub.planId, planId: plan.id, amount }
       : {
@@ -289,8 +290,8 @@ export async function createRenewalInvoices(days = 7) {
 
 async function createPeriodInvoice({ sub, plan }) {
   return systemDb.transaction(async (transaction) => {
-    const price = await currentPrice(plan.id, sub.billingCycle, 'NPR', new Date(), transaction);
-    if (price == null) throw new Error('no price');
+    const price = (await currentPrice(plan.id, sub.billingCycle, 'NPR', new Date(), transaction)) ?? (plan.isCustom ? Number(sub.amount) : null);
+    if (price == null || price <= 0) throw new Error('no price');
     const money = await priceBreakdown(price, null);
     const tenant = await sys.Tenant.findByPk(sub.tenantId, { transaction });
     const periodEnd = addPeriod(sub.currentPeriodEnd, sub.billingCycle);
@@ -302,4 +303,31 @@ async function createPeriodInvoice({ sub, plan }) {
     await sys.InvoiceItem.create({ tenantId: sub.tenantId, invoiceId: inv.id, description: `${plan.name} plan — ${sub.billingCycle.toLowerCase()} renewal (${ymd(sub.currentPeriodEnd)} – ${ymd(periodEnd)})`, quantity: 1, unitAmount: price, amount: price }, { transaction });
     return inv;
   });
+}
+
+/**
+ * Super Admin: invoice for a negotiated price (Enterprise / custom plans). Paying it activates the plan for one period,
+ * exactly like a self-service checkout invoice.
+ */
+export async function createCustomInvoice({ tenantId, planId, billingCycle, amount, description, actor, req }) {
+  const result = await systemDb.transaction(async (transaction) => {
+    const sub = await currentSubscription(tenantId, transaction);
+    const plan = await sys.Plan.findByPk(planId, { transaction });
+    if (!plan) throw NotFound('Plan');
+    if (!(amount > 0)) throw BadRequest('Amount must be greater than zero');
+    const money = await priceBreakdown(amount, null);
+    const tenant = await sys.Tenant.findByPk(tenantId, { transaction });
+    const start = new Date();
+    const periodEnd = addPeriod(start, billingCycle);
+    const invoice = await sys.Invoice.create({
+      tenantId, subscriptionId: sub.id, number: await nextInvoiceNumber(transaction), status: 'OPEN', kind: 'SUBSCRIPTION', ...money,
+      targetPlanId: plan.id, targetCycle: billingCycle, periodStart: start, periodEnd, billTo: await billTo(tenant, transaction),
+      dueAt: new Date(Date.now() + Number(await getSetting('billing.due_days')) * DAY),
+    }, { transaction });
+    await sys.InvoiceItem.create({ tenantId, invoiceId: invoice.id, description: description ?? `${plan.name} plan (${billingCycle.toLowerCase()}, ${ymd(start)} – ${ymd(periodEnd)})`, quantity: 1, unitAmount: amount, amount }, { transaction });
+    await audit({ transaction, tenantId, actor, action: 'invoice.create', entityType: 'invoice', entityId: invoice.id, after: { number: invoice.number, total: money.total, custom: true }, req });
+    return { invoice, slug: tenant.slug, email: await ownerEmail(tenantId, transaction) };
+  });
+  await enqueueEmail({ tenantId, to: result.email, template: 'billing.invoice', data: { number: result.invoice.number, total: result.invoice.total, dueDate: ymd(result.invoice.dueAt), url: `${workspaceUrl(result.slug)}/billing/invoices/${result.invoice.id}` } });
+  return result.invoice;
 }
