@@ -12,3 +12,6 @@ frontend/*/dist-ssr/
 
 # Local uploads (dev STORAGE_DRIVER=local)
 backend/storage/
+
+# Local Redis snapshots
+*.rdb
