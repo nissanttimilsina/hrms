@@ -10,7 +10,7 @@ import { BadRequest, Conflict, NotFound } from '../utils/errors.js';
 import { enqueueEmail } from '../jobs/queues.js';
 
 const RESERVED = new Set(['www', 'app', 'admin', 'api', 'mail', 'smtp', 'status', 'help', 'docs', 'blog',
-  'support', 'billing', 'static', 'cdn', 'assets', 'staging', 'dev', 'test', 'demo-admin', 'auth']);
+  'support', 'billing', 'static', 'cdn', 'assets', 'staging', 'dev', 'test', 'demo-admin', 'auth', 'devices', 'iclock']);
 
 export const DEFAULT_TENANT_SETTINGS = {
   'org.financial_year_start': { calendar: 'BS', month: 4, day: 1 }, // Shrawan 1

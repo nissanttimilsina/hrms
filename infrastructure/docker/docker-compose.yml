@@ -83,12 +83,13 @@ services:
       context: ../../frontend
       args:
         ROOT_DOMAIN: ${ROOT_DOMAIN}
+        MARKETING_HOST: ${MARKETING_HOST}
         BRAND_NAME: ${BRAND_NAME:-Lishnu HRMS}
         CONTACT_EMAIL: ${CONTACT_EMAIL:-}
         CONTACT_PHONE: ${CONTACT_PHONE:-}
     image: hrms-web:${IMAGE_TAG:-latest}
     restart: unless-stopped
-    environment: { ROOT_DOMAIN: "${ROOT_DOMAIN}" }
+    environment: { ROOT_DOMAIN: "${ROOT_DOMAIN}", MARKETING_HOST: "${MARKETING_HOST}", MARKETING_REDIRECT_HOST: "${MARKETING_REDIRECT_HOST}" }
     ports: ["80:80", "443:443"]
     volumes:
       - ${CERTS_DIR:-/etc/hrms/certs}:/etc/nginx/certs:ro

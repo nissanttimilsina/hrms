@@ -1,4 +1,5 @@
-# Generated from a template at container start: ${ROOT_DOMAIN} is substituted from the environment.
+# Generated from a template at container start: ${ROOT_DOMAIN}, ${MARKETING_HOST} and ${MARKETING_REDIRECT_HOST}
+# are substituted from the environment (the web service sets them from .env).
 # Certificates: one wildcard certificate for ${ROOT_DOMAIN} and *.${ROOT_DOMAIN} in /etc/nginx/certs.
 
 upstream hrms_api { server api:4000; keepalive 32; }
@@ -29,20 +30,20 @@ server {
   location / { return 301 https://$host$request_uri; }
 }
 
-# Apex → www
+# The other public-site hostname (apex or www) redirects to the canonical one.
 server {
   listen 443 ssl;
   http2 on;
-  server_name ${ROOT_DOMAIN};
+  server_name ${MARKETING_REDIRECT_HOST};
   include /etc/nginx/snippets/security.conf;
-  return 301 https://www.${ROOT_DOMAIN}$request_uri;
+  return 301 https://${MARKETING_HOST}$request_uri;
 }
 
 # Marketing website (prerendered pages; unknown paths fall back to the client-side shell)
 server {
   listen 443 ssl;
   http2 on;
-  server_name www.${ROOT_DOMAIN};
+  server_name ${MARKETING_HOST};
   root /srv/marketing;
   include /etc/nginx/snippets/security.conf;
   add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'self'; object-src 'none'" always;

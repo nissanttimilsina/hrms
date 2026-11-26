@@ -11,12 +11,15 @@ COPY company-app/package.json company-app/
 RUN npm ci --no-audit --no-fund
 COPY . .
 ARG ROOT_DOMAIN=yourhrms.com
+# Where the public website lives: www.<ROOT_DOMAIN> (default) or ROOT_DOMAIN itself when that is already a subdomain.
+ARG MARKETING_HOST=
 ARG BRAND_NAME="Lishnu HRMS"
 ARG CONTACT_EMAIL=""
 ARG CONTACT_PHONE=""
-ENV VITE_ROOT_DOMAIN=${ROOT_DOMAIN} VITE_SITE_URL=https://www.${ROOT_DOMAIN} VITE_BRAND_NAME=${BRAND_NAME} \
+ENV VITE_ROOT_DOMAIN=${ROOT_DOMAIN} VITE_BRAND_NAME=${BRAND_NAME} \
     VITE_CONTACT_EMAIL=${CONTACT_EMAIL} VITE_CONTACT_PHONE=${CONTACT_PHONE}
-RUN if [ -z "$VITE_CONTACT_EMAIL" ]; then export VITE_CONTACT_EMAIL=hello@${ROOT_DOMAIN}; fi && npm run build
+RUN export VITE_SITE_URL="https://${MARKETING_HOST:-www.${ROOT_DOMAIN}}" && \
+    if [ -z "$VITE_CONTACT_EMAIL" ]; then export VITE_CONTACT_EMAIL=hello@${ROOT_DOMAIN}; fi && npm run build
 
 FROM nginx:1.27-alpine AS runtime
 RUN rm /etc/nginx/conf.d/default.conf

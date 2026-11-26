@@ -7,7 +7,8 @@ cd "$(dirname "$0")/../docker"
 [[ -f .env ]] || { echo "Missing infrastructure/docker/.env (copy .env.example and fill it in)"; exit 1; }
 [[ "$(stat -c %a .env)" == "600" ]] || { chmod 600 .env; echo "Fixed .env permissions to 600"; }
 if grep -qE '=CHANGE_ME' .env; then echo "Refusing to deploy: .env still contains CHANGE_ME values:"; grep -nE '=CHANGE_ME' .env | cut -d= -f1; exit 1; fi
-source <(grep -E '^(ROOT_DOMAIN|CERTS_DIR)=' .env)
+source <(grep -E '^(ROOT_DOMAIN|CERTS_DIR|MARKETING_HOST)=' .env)
+MARKETING_HOST="${MARKETING_HOST:-www.$ROOT_DOMAIN}"
 CERTS_DIR="${CERTS_DIR:-/etc/hrms/certs}"
 [[ -s "$CERTS_DIR/fullchain.pem" && -s "$CERTS_DIR/privkey.pem" ]] || { echo "No certificate in $CERTS_DIR: run issue-cert.sh first"; exit 1; }
 
@@ -21,5 +22,5 @@ for i in $(seq 1 60); do
   sleep 2
 done
 docker compose ps
-curl -fsS --resolve "www.$ROOT_DOMAIN:443:127.0.0.1" "https://www.$ROOT_DOMAIN/api/v1/public/features" -o /dev/null && echo "==> https://www.$ROOT_DOMAIN is serving" || { echo "!! Public check failed: docker compose logs --tail=100 api web"; exit 1; }
+curl -fsS --resolve "$MARKETING_HOST:443:127.0.0.1" "https://$MARKETING_HOST/api/v1/public/features" -o /dev/null && echo "==> https://$MARKETING_HOST is serving" || { echo "!! Public check failed: docker compose logs --tail=100 api web"; exit 1; }
 echo "$IMAGE_TAG" >> /etc/hrms/deploy-history 2>/dev/null || true
