@@ -68,4 +68,16 @@ if [[ ! -f /etc/hrms/backup.passphrase ]]; then
   openssl rand -base64 48 > /etc/hrms/backup.passphrase && chmod 600 /etc/hrms/backup.passphrase
   echo "   Created /etc/hrms/backup.passphrase: COPY IT TO YOUR PASSWORD MANAGER. Backups cannot be restored without it."
 fi
-echo "Done. Next: clone the repository to /opt/hrms and follow DEPLOYMENT.md (certificates, .env, deploy)."
+echo "==> Deployment user 'hrms' (runs git pull + deploy; root keeps certificates, backups and cron)"
+if ! id hrms >/dev/null 2>&1; then adduser --disabled-password --gecos "" hrms; fi
+usermod -aG docker hrms
+if [[ -s /root/.ssh/authorized_keys && ! -s /home/hrms/.ssh/authorized_keys ]]; then
+  install -d -m 700 -o hrms -g hrms /home/hrms/.ssh
+  install -m 600 -o hrms -g hrms /root/.ssh/authorized_keys /home/hrms/.ssh/authorized_keys
+fi
+install -d -m 0755 -o hrms -g hrms /opt/hrms
+[[ -d /opt/hrms/.git ]] && chown -R hrms:hrms /opt/hrms
+chgrp hrms /etc/hrms /etc/hrms/certs && chmod 0750 /etc/hrms /etc/hrms/certs   # hrms may check certs; secrets stay root-only (600)
+touch /etc/hrms/deploy-history && chown hrms:hrms /etc/hrms/deploy-history
+
+echo "Done. Next: as hrms, clone the repository to /opt/hrms and follow documentation/deployment/vps-deployment.md (certificates, .env, deploy)."
