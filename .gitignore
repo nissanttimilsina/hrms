@@ -8,3 +8,4 @@ dist-gallery/
 coverage/
 infrastructure/nginx/certs/
 backups/
+frontend/*/dist-ssr/

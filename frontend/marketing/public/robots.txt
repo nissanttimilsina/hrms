@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Disallow: /verify-email
+Sitemap: https://www.yourhrms.com/sitemap.xml

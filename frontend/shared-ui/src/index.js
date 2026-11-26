@@ -6,3 +6,4 @@ export { Dialog, ConfirmDialog, ToastProvider, useToast } from './components/ove
 export { DataTable, UsageMeter } from './components/data.jsx';
 export { describeApiError, UpgradePrompt, SubscriptionBanner, AppShell, BrandProvider } from './components/saas.jsx';
 export { formatNPR, formatDate } from './format.js';
+export { ApiError, createApiClient, qs } from './api.js';
