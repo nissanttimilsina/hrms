@@ -18,6 +18,7 @@ export const FEATURES = [
   ['attendance', 'Attendance Management', 'Time', false],
   ['leave', 'Leave Management', 'Time', false],
   ['shifts', 'Shift Scheduling', 'Time', false],
+  ['biometric', 'Biometric Device Integration', 'Time', false],
   ['payroll', 'Payroll Management', 'Payroll', false],
   ['payroll_advanced', 'Advanced Payroll', 'Payroll', false],
   ['expenses', 'Expense Management', 'Finance', false],
@@ -43,7 +44,7 @@ export const FEATURES = [
 
 // --------------------------------------------------------------------------- plans (initial defaults)
 const BASIC = ['attendance', 'leave'];
-const PROFESSIONAL = [...BASIC, 'payroll', 'shifts', 'recruitment', 'expenses', 'performance',
+const PROFESSIONAL = [...BASIC, 'payroll', 'shifts', 'biometric', 'recruitment', 'expenses', 'performance',
   'reports_advanced', 'document_expiry_alerts', 'workflows', 'onboarding'];
 const BUSINESS = [...PROFESSIONAL, 'payroll_advanced', 'kpi_appraisal', 'training', 'assets',
   'analytics_advanced', 'multi_branch', 'custom_fields', 'workflows_advanced', 'api_integrations', 'helpdesk'];
@@ -80,6 +81,7 @@ export const RESOURCES = {
   audit: { module: 'audit', actions: ['view', 'export'] },
   documents: { module: 'documents', actions: CRUD },
   attendance: { module: 'attendance', actions: ALL },
+  devices: { module: 'biometric', actions: ['view', 'manage'] },
   leave: { module: 'leave', actions: ALL },
   shifts: { module: 'shifts', actions: ALL },
   payroll: { module: 'payroll', actions: ALL },
@@ -116,7 +118,7 @@ export const DEFAULT_ROLES = [
   { key: 'company_admin', name: 'Company Administrator', grants: every('COMPANY') },
   { key: 'hr_manager', name: 'HR Manager', grants: [
     ...r(['branches', 'departments', 'employees', 'documents', 'attendance', 'leave', 'shifts', 'recruitment',
-      'performance', 'training', 'assets', 'reports', 'holidays', 'announcements'], '*', 'COMPANY'),
+      'performance', 'training', 'assets', 'reports', 'holidays', 'announcements', 'devices'], '*', 'COMPANY'),
     ...r(['users', 'roles'], ['view'], 'COMPANY'),
     ...r(['support'], ['view', 'create'], 'COMPANY'),
   ] },

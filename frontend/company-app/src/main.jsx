@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppShell, ToastProvider, Skeleton, Button, SubscriptionBanner, BrandProvider } from '@hrms/shared-ui';
-import { LayoutDashboard, Users, Building2, Clock, CalendarDays, Wallet, Megaphone, ShieldCheck, CreditCard, LifeBuoy, Settings as Cog, Bell, UserRound, ScrollText, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Users, Building2, Clock, CalendarDays, Wallet, Megaphone, ShieldCheck, CreditCard, LifeBuoy, Settings as Cog, Bell, UserRound, ScrollText, BarChart3, Fingerprint } from 'lucide-react';
 import { AuthProvider, useAuth, api, dt } from './lib.jsx';
 import { Login, AcceptInvite, ForgotPassword, ResetPassword } from './pages/Auth.jsx';
 import { Dashboard } from './pages/Home.jsx';
@@ -11,6 +11,7 @@ import { Employees, EmployeeProfile, Organization } from './pages/People.jsx';
 import { MyAttendance, AttendanceRegister, MyLeave, LeaveApprovals, LeaveSetup } from './pages/Time.jsx';
 import { PayrollRuns, PayrollRunDetail, PayrollSetup, MyPayslips } from './pages/Pay.jsx';
 import { Reports } from './pages/Reports.jsx';
+import { Devices } from './pages/Devices.jsx';
 import { Access, Announcements, Billing, Support, SupportTicket, Settings, Audit, MyProfile } from './pages/Admin.jsx';
 import './styles.css';
 
@@ -32,6 +33,7 @@ function buildNav(a) {
     ] },
     { label: 'Time & pay', items: [
       wide('attendance:view') && { key: '/attendance', label: 'Attendance', icon: I(Clock), locked: !f('attendance') },
+      can('devices:view') && f('biometric') && { key: '/devices', label: 'Devices', icon: I(Fingerprint) },
       can('leave:approve') && { key: '/leave/approvals', label: 'Leave approvals', icon: I(CalendarDays), locked: !f('leave') },
       can('leave:configure') && { key: '/leave/setup', label: 'Leave setup', icon: I(CalendarDays) },
       wide('payroll:view') && { key: '/payroll', label: 'Payroll', icon: I(Wallet), locked: !f('payroll') },
@@ -122,6 +124,7 @@ function Shell() {
             <Route path="/employees/:id" element={<EmployeeProfile />} />
             <Route path="/organization" element={<Organization />} />
             <Route path="/attendance/*" element={<AttendanceRegister />} />
+            <Route path="/devices" element={<Devices />} />
             <Route path="/leave/approvals" element={<LeaveApprovals />} />
             <Route path="/leave/setup" element={<LeaveSetup />} />
             <Route path="/payroll" element={<PayrollRuns />} />

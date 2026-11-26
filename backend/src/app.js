@@ -12,6 +12,7 @@ import { env } from './config/env.js';
 import { logger } from './utils/logger.js';
 import { requestId, apiLimiter, notFound, errorHandler } from './middleware/common.js';
 import { apiRouter } from './routes/index.js';
+import { iclockRouter } from './modules/devices/iclock.routes.js';
 import { checkDatabase } from './database/index.js';
 import { checkRedis } from './services/redis.js';
 
@@ -59,6 +60,7 @@ export function createApp() {
     app.use('/api/docs', (_req, res, next) => { res.removeHeader('Content-Security-Policy'); next(); }, swaggerUi.serve, swaggerUi.setup(spec));
   }
 
+  app.use('/iclock', iclockRouter()); // biometric terminals (ADMS push protocol)
   app.use('/api/v1', apiLimiter, apiRouter());
 
   app.use(notFound);

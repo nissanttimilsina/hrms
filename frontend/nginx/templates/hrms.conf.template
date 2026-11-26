@@ -23,6 +23,8 @@ server {
   listen 80 default_server;
   server_name _;
   location /.well-known/acme-challenge/ { root /var/www/acme; }
+  # Many biometric terminals cannot do HTTPS: allow only the device protocol over plain HTTP.
+  location /iclock/ { include /etc/nginx/snippets/proxy.conf; }
   location = /healthz { access_log off; return 200 "ok\n"; }
   location / { return 301 https://$host$request_uri; }
 }

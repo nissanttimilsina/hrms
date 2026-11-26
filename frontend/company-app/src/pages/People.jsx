@@ -21,7 +21,7 @@ const employeeFields = (org, managers) => [
   { name: 'branchId', label: 'Branch', type: 'select', options: org.branches, placeholder: '—' }, { name: 'departmentId', label: 'Department', type: 'select', options: org.departments, placeholder: '—' },
   { name: 'designationId', label: 'Designation', type: 'select', options: org.designations, placeholder: '—' }, { name: 'managerId', label: 'Reporting manager', type: 'select', options: managers, placeholder: '—' },
   { name: 'gender', label: 'Gender', type: 'select', placeholder: '—', options: ['FEMALE', 'MALE', 'OTHER', 'UNDISCLOSED'].map((x) => ({ value: x, label: x.toLowerCase() })) },
-  { name: 'dateOfBirth', label: 'Date of birth', type: 'date' }, { name: 'pan', label: 'PAN (9 digits)' }, { name: 'ssfId', label: 'SSF ID' },
+  { name: 'dateOfBirth', label: 'Date of birth', type: 'date' }, { name: 'pan', label: 'PAN (9 digits)' }, { name: 'ssfId', label: 'SSF ID' }, { name: 'biometricId', label: 'Biometric device ID', hint: 'The ID this person is enrolled under on attendance devices' },
 ];
 const clean = (b) => Object.fromEntries(Object.entries(b).map(([k, v]) => [k, v === '' ? null : v]).filter(([k, v]) => !(v === null && ['firstName', 'lastName', 'joinedOn'].includes(k))));
 const dateOnly = (b) => ({ ...b, ...['joinedOn', 'dateOfBirth', 'contractEndOn', 'probationEndOn'].reduce((o, k) => (b[k] ? { ...o, [k]: String(b[k]).slice(0, 10) } : o), {}) });
@@ -130,7 +130,7 @@ export function EmployeeProfile() {
         <div className="grid gap-4 lg:grid-cols-2">
           <Card><CardHeader title="Employment" actions={<StatusBadge value={e.status} />} /><CardBody><KV items={[['Employee ID', e.employeeCode], ['Joined', dt(e.joinedOn)], ['Type', e.employmentType?.toLowerCase().replace('_', ' ')], ['Branch', e.branch?.name], ['Department', e.department?.name], ['Designation', e.designation?.name], ['Manager', e.manager ? fullName(e.manager) : '—'], ['Shift', e.shift?.name ?? 'Default'], e.exitedOn && ['Exited', dt(e.exitedOn)], ['Login', e.user ? <StatusBadge value={e.user.status} /> : 'No login']]} /></CardBody></Card>
           <Card><CardHeader title="Personal & statutory" /><CardBody>
-            {e.pan !== undefined || e.bank ? <KV items={[['Work email', e.workEmail], ['Mobile', e.phone], ['Personal email', e.personalEmail], ['Date of birth', dt(e.dateOfBirth)], ['Gender', e.gender?.toLowerCase()], ['PAN', e.pan], ['SSF ID', e.ssfId], ['Bank', e.bank?.bankName ? `${e.bank.bankName} ****${e.bank.last4 ?? ''}` : '—'], ['Emergency contact', e.emergencyContacts?.[0] ? `${e.emergencyContacts[0].name} (${e.emergencyContacts[0].relation}) ${e.emergencyContacts[0].phone}` : '—']]} />
+            {e.pan !== undefined || e.bank ? <KV items={[['Work email', e.workEmail], ['Mobile', e.phone], ['Personal email', e.personalEmail], ['Date of birth', dt(e.dateOfBirth)], ['Gender', e.gender?.toLowerCase()], ['PAN', e.pan], ['SSF ID', e.ssfId], ['Biometric ID', e.biometricId ?? '—'], ['Bank', e.bank?.bankName ? `${e.bank.bankName} ****${e.bank.last4 ?? ''}` : '—'], ['Emergency contact', e.emergencyContacts?.[0] ? `${e.emergencyContacts[0].name} (${e.emergencyContacts[0].relation}) ${e.emergencyContacts[0].phone}` : '—']]} />
               : <p className="text-sm text-ink-500">You don't have access to personal details.</p>}
             {a.can('employees:edit') && <Button size="sm" variant="secondary" className="mt-4" onClick={() => setDlg('bank')}>Update bank account</Button>}
           </CardBody></Card>

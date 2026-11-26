@@ -35,7 +35,7 @@ const body = z.object({
   status: z.enum(STATUSES).default('ACTIVE'), employmentType: z.enum(TYPES).default('PERMANENT'),
   joinedOn: z.string().date(), dateOfBirth: dateN, contractEndOn: dateN, probationEndOn: dateN,
   gender: z.enum(['FEMALE', 'MALE', 'OTHER', 'UNDISCLOSED']).nullish(), maritalStatus: z.enum(['SINGLE', 'MARRIED', 'OTHER']).nullish(),
-  pan: z.string().trim().regex(/^\d{9}$/, 'PAN must be 9 digits').nullish(), ssfId: z.string().trim().max(30).nullish(), citizenshipNo: z.string().trim().max(40).nullish(),
+  pan: z.string().trim().regex(/^\d{9}$/, 'PAN must be 9 digits').nullish(), ssfId: z.string().trim().max(30).nullish(), biometricId: z.string().trim().regex(/^[A-Za-z0-9]{1,24}$/, 'Letters and digits only (max 24)').nullish(), citizenshipNo: z.string().trim().max(40).nullish(),
   address: z.object({ permanent: z.string().max(300), temporary: z.string().max(300), district: z.string().max(60), province: z.string().max(60) }).partial().optional(),
   emergencyContacts: z.array(z.object({ name: z.string().trim().min(1).max(120), relation: z.string().trim().max(40), phone: z.string().trim().max(30) }).strict()).max(5).optional(),
   bank: bankBody.optional(),
@@ -43,7 +43,7 @@ const body = z.object({
 }).strict();
 const idParam = { params: z.object({ id: z.string().uuid() }) };
 
-const LIST_ATTRS = ['id', 'employeeCode', 'firstName', 'lastName', 'workEmail', 'phone', 'branchId', 'departmentId', 'managerId', 'designationId', 'shiftId', 'status', 'employmentType', 'joinedOn', 'exitedOn', 'createdAt'];
+const LIST_ATTRS = ['id', 'employeeCode', 'firstName', 'lastName', 'workEmail', 'phone', 'branchId', 'departmentId', 'managerId', 'designationId', 'shiftId', 'biometricId', 'status', 'employmentType', 'joinedOn', 'exitedOn', 'createdAt'];
 const SENSITIVE = ['bank', 'pan', 'ssfId', 'citizenshipNo', 'dateOfBirth', 'personalEmail', 'address', 'emergencyContacts', 'maritalStatus', 'gender'];
 const TRACKED = { branchId: 'TRANSFER', departmentId: 'TRANSFER', designationId: 'DESIGNATION_CHANGE', status: 'STATUS_CHANGE', managerId: 'TRANSFER', employmentType: 'STATUS_CHANGE', contractEndOn: 'CONTRACT_RENEWAL' };
 

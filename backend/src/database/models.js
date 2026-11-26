@@ -77,7 +77,7 @@ export function defineModels(sequelize) {
     branchId: U, departmentId: U, managerId: U, status: S,
     joinedOn: DataTypes.DATEONLY, exitedOn: DataTypes.DATEONLY, deletedAt: D,
     designationId: U, shiftId: U, employmentType: S, dateOfBirth: DataTypes.DATEONLY, gender: S, maritalStatus: S,
-    personalEmail: S, pan: S, ssfId: S, citizenshipNo: S, address: J, emergencyContacts: J, bank: J,
+    personalEmail: S, pan: S, ssfId: S, biometricId: S, citizenshipNo: S, address: J, emergencyContacts: J, bank: J,
     contractEndOn: DataTypes.DATEONLY, probationEndOn: DataTypes.DATEONLY, photoFileId: U, customFields: J,
   }, opts('employees'));
 
@@ -277,6 +277,21 @@ export function defineModels(sequelize) {
   SubscriptionRequest.belongsTo(Plan, { foreignKey: 'planId', as: 'plan' });
   SubscriptionRequest.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
 
+  const AttendanceDevice = sequelize.define('AttendanceDevice', {
+    id, tenantId, branchId: U, name: S, serialNumber: S, vendor: S, model: S, location: S, status: S, allowedIps: DataTypes.ARRAY(DataTypes.TEXT),
+    lastSeenAt: D, lastIp: S, firmware: S, deviceInfo: J, lastPunchAt: D, punchCount: DataTypes.BIGINT, lastError: T, lastErrorAt: D,
+    offlineAlertedAt: D, deletedAt: D,
+  }, opts('attendance_devices'));
+  const DevicePunch = sequelize.define('DevicePunch', {
+    id, tenantId, deviceId: U, deviceUserId: S, punchedAt: D, statusCode: I, verifyMode: I, employeeId: U, result: S, message: T,
+  }, createdOnly('device_punches'));
+  const DeviceLog = sequelize.define('DeviceLog', {
+    id, tenantId, deviceId: U, level: S, event: S, message: T, details: J,
+  }, createdOnly('device_logs'));
+  DevicePunch.belongsTo(Employee, { foreignKey: 'employeeId', as: 'employee' });
+  DevicePunch.belongsTo(AttendanceDevice, { foreignKey: 'deviceId', as: 'device' });
+  AttendanceDevice.belongsTo(Branch, { foreignKey: 'branchId', as: 'branch' });
+
   PlanEntitlement.belongsTo(FeatureCatalog, { foreignKey: 'featureId', as: 'feature' });
   Subscription.belongsTo(Plan, { foreignKey: 'planId', as: 'plan' });
   Subscription.hasMany(SubscriptionItem, { foreignKey: 'subscriptionId', as: 'items' });
@@ -295,7 +310,7 @@ export function defineModels(sequelize) {
   SupportTicket.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
 
   return {
-    SubscriptionRequest, TenantFeatureOverride,
+    SubscriptionRequest, TenantFeatureOverride, AttendanceDevice, DevicePunch, DeviceLog,
     TaxRuleSet, SalaryComponent, EmployeeSalary, PayrollRun, PayrollItem, PayrollAdjustment,
     Designation, Shift, EmployeeHistory, File, AttendanceRecord, AttendanceCorrection, Holiday, LeaveType, LeaveTransaction,
     LeaveRequest, LeaveApproval, Announcement, Notification,
