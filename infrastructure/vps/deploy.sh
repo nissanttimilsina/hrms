@@ -9,6 +9,10 @@ cd "$(dirname "$0")/../docker"
 if grep -qE '=CHANGE_ME' .env; then echo "Refusing to deploy: .env still contains CHANGE_ME values:"; grep -nE '=CHANGE_ME' .env | cut -d= -f1; exit 1; fi
 source <(grep -E '^(ROOT_DOMAIN|CERTS_DIR|MARKETING_HOST)=' .env)
 MARKETING_HOST="${MARKETING_HOST:-www.$ROOT_DOMAIN}"
+case "$MARKETING_HOST" in
+  "$ROOT_DOMAIN"|*."$ROOT_DOMAIN") ;;
+  *) echo "Refusing to deploy: MARKETING_HOST ($MARKETING_HOST) is not $ROOT_DOMAIN or a subdomain of it. Fix MARKETING_HOST / MARKETING_REDIRECT_HOST in .env"; exit 1 ;;
+esac
 CERTS_DIR="${CERTS_DIR:-/etc/hrms/certs}"
 [[ -s "$CERTS_DIR/fullchain.pem" && -s "$CERTS_DIR/privkey.pem" ]] || { echo "No certificate in $CERTS_DIR: run issue-cert.sh first"; exit 1; }
 
