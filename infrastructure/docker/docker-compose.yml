@@ -12,6 +12,7 @@ x-api-env: &api-env
   DATABASE_URL_SYSTEM: postgresql://hrms_system:${HRMS_SYSTEM_PASSWORD}@postgres:5432/hrms
   REDIS_URL: redis://:${REDIS_PASSWORD}@redis:6379
   TRUST_PROXY: "1"
+  DB_SSL: disable   # bundled Postgres on the private Docker network; use verify for a managed database
   COOKIE_SECURE: "true"
   STORAGE_DIR: /app/storage
 

@@ -17,6 +17,9 @@ const schema = z.object({
   DATABASE_URL_APP: z.string().url(), // RLS-enforced tenant traffic
   DATABASE_URL_SYSTEM: z.string().url(), // platform / auth / schedulers (BYPASSRLS)
   DB_POOL_MAX: z.coerce.number().int().positive().default(10),
+  // Database TLS: verify (default in production, managed/remote databases), require (encrypt, don't verify), disable
+  // (the bundled Postgres container on Docker's private network).
+  DB_SSL: z.enum(['verify', 'require', 'disable']).optional(),
 
   REDIS_URL: z.string().optional(),
 

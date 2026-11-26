@@ -9,7 +9,10 @@ const common = {
   logging: env.LOG_LEVEL === 'trace' ? (sql) => logger.trace({ sql }) : false,
   pool: { max: env.DB_POOL_MAX, min: 0, idle: 10_000, acquire: 30_000 },
   define: { underscored: true },
-  dialectOptions: env.isProd ? { ssl: { require: true, rejectUnauthorized: true } } : {},
+  dialectOptions: (() => {
+    const mode = env.DB_SSL ?? (env.isProd ? 'verify' : 'disable');
+    return mode === 'disable' ? {} : { ssl: { require: true, rejectUnauthorized: mode === 'verify' } };
+  })(),
 };
 
 /**
