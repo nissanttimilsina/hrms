@@ -99,6 +99,13 @@ openssl rand -base64 32                              # DATA_ENCRYPTION_KEY
 - `PAYMENTS_ENABLED`: start with `BANK_TRANSFER`. Add `ESEWA` and/or `KHALTI` only with **live** credentials. The API refuses to start with sandbox settings in production.
 - The API also refuses to start if `EMAIL_TRANSPORT` is not `smtp`, or if a secret is weak or missing. Read the log if it does not come up.
 
+### Server that already runs nginx for other sites
+
+If `ss -ltnp | grep -E ':(80|443)'` shows another web server, don't stop it. Put HRMS behind it instead:
+
+1. In `.env`, uncomment `WEB_HTTP_BIND`, `WEB_HTTPS_BIND` and `REAL_IP_FROM`, so the HRMS web container listens only on `127.0.0.1:18080` and `127.0.0.1:18443`.
+2. As root: `/opt/hrms/infrastructure/vps/host-nginx.sh`. This adds one site for `<domain>` and `*.<domain>` to the existing nginx, using the HRMS certificate, then tests and reloads nginx. Other sites keep working.
+
 ## 5. Deploy
 
 ```bash

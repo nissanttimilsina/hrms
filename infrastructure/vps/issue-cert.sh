@@ -26,7 +26,8 @@ fi
 install -m 644 "$LE/live/$ROOT_DOMAIN/fullchain.pem" "$CERTS_DIR/fullchain.pem"
 install -m 600 "$LE/live/$ROOT_DOMAIN/privkey.pem"   "$CERTS_DIR/privkey.pem"
 echo "Certificate installed in $CERTS_DIR (expires $(openssl x509 -enddate -noout -in "$CERTS_DIR/fullchain.pem" | cut -d= -f2))"
-# Reload Nginx if it is running
+# Reload the host nginx when HRMS runs behind it, and the HRMS web container
+if systemctl is-active --quiet nginx 2>/dev/null && [[ -e /etc/nginx/sites-enabled/hrms.conf || -e /etc/nginx/conf.d/hrms.conf ]]; then systemctl reload nginx && echo "host nginx reloaded"; fi
 if docker compose -f "${HRMS_DIR:-/opt/hrms}/infrastructure/docker/docker-compose.yml" ps web --status running -q 2>/dev/null | grep -q .; then
   docker compose -f "${HRMS_DIR:-/opt/hrms}/infrastructure/docker/docker-compose.yml" exec -T web nginx -s reload && echo "nginx reloaded"
 fi

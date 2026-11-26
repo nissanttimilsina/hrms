@@ -89,8 +89,9 @@ services:
         CONTACT_PHONE: ${CONTACT_PHONE:-}
     image: hrms-web:${IMAGE_TAG:-latest}
     restart: unless-stopped
-    environment: { ROOT_DOMAIN: "${ROOT_DOMAIN}", MARKETING_HOST: "${MARKETING_HOST}", MARKETING_REDIRECT_HOST: "${MARKETING_REDIRECT_HOST}" }
-    ports: ["80:80", "443:443"]
+    environment: { ROOT_DOMAIN: "${ROOT_DOMAIN}", MARKETING_HOST: "${MARKETING_HOST}", MARKETING_REDIRECT_HOST: "${MARKETING_REDIRECT_HOST}", REAL_IP_FROM: "${REAL_IP_FROM:-127.0.0.1/32}" }
+    # Own the server: 80/443. Behind an existing web server on the host: 127.0.0.1:18080 / 127.0.0.1:18443 (see .env.example).
+    ports: ["${WEB_HTTP_BIND:-80}:80", "${WEB_HTTPS_BIND:-443}:443"]
     volumes:
       - ${CERTS_DIR:-/etc/hrms/certs}:/etc/nginx/certs:ro
       - acme:/var/www/acme
