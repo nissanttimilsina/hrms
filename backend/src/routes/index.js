@@ -6,6 +6,10 @@ import { employeesRouter } from '../modules/employees/employees.routes.js';
 import { accessRouter } from '../modules/access/access.routes.js';
 import { tenantSubscriptionRouter, publicPlansRouter } from '../modules/subscriptions/subscription.routes.js';
 import { adminRouter } from '../modules/admin/admin.routes.js';
+import { commercialAdminRouter } from '../modules/admin/commercial.routes.js';
+import { publicRouter } from '../modules/public/public.routes.js';
+import { tenantBillingRouter, paymentReturnRouter } from '../modules/billing/billing.routes.js';
+import { tenantSupportRouter } from '../modules/support/support.routes.js';
 
 /**
  * /api/v1 route map.
@@ -18,13 +22,19 @@ import { adminRouter } from '../modules/admin/admin.routes.js';
 export function apiRouter() {
   const r = Router();
 
-  r.use('/public', publicPlansRouter);
+  r.use('/public', publicPlansRouter, publicRouter);
+  r.use('/payments', paymentReturnRouter); // provider browser redirects; verified server-side
 
   r.use('/admin/auth', platformAuthRouter);
-  r.use('/admin', adminRouter);
+  r.use('/admin', adminRouter, commercialAdminRouter);
 
   r.use(resolveHostTenant);
   r.use('/auth', tenantAuthRouter);
+
+  // Billing and support stay writable when the workspace is read-only, so customers can always pay and get help.
+  const recovery = [authenticateTenant, subscriptionGuard({ allowWhenReadOnly: true })];
+  r.use('/billing', ...recovery, tenantBillingRouter);
+  r.use('/support/tickets', ...recovery, tenantSupportRouter);
 
   const tenant = Router();
   tenant.use(authenticateTenant, subscriptionGuard());

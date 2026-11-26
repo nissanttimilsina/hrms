@@ -90,9 +90,10 @@ export const RESOURCES = {
   assets: { module: 'assets', actions: ALL },
   reports: { module: 'reports', actions: ['view', 'export', 'configure'] },
   workflows: { module: 'workflows', actions: ['view', 'create', 'edit', 'delete', 'configure'] },
+  support: { module: 'support', actions: ['view', 'create'] },
 };
 // Permissions that are not about records, so data scope does not apply.
-const UNSCOPED = new Set(['users', 'roles', 'settings', 'subscription', 'audit', 'workflows']);
+const UNSCOPED = new Set(['users', 'roles', 'settings', 'subscription', 'audit', 'workflows', 'support']);
 
 export const PERMISSIONS = Object.entries(RESOURCES).flatMap(([resource, { module, actions }]) =>
   actions.map((action) => ({
@@ -115,6 +116,7 @@ export const DEFAULT_ROLES = [
     ...r(['branches', 'departments', 'employees', 'documents', 'attendance', 'leave', 'shifts', 'recruitment',
       'performance', 'training', 'assets', 'reports'], '*', 'COMPANY'),
     ...r(['users', 'roles'], ['view'], 'COMPANY'),
+    ...r(['support'], ['view', 'create'], 'COMPANY'),
   ] },
   { key: 'hr_officer', name: 'HR Officer', grants: [
     ...r(['employees', 'documents'], ['view', 'create', 'edit', 'import', 'export'], 'COMPANY'),
@@ -133,6 +135,7 @@ export const DEFAULT_ROLES = [
     ...r(['expenses'], '*', 'COMPANY'),
     ...r(['reports'], ['view', 'export'], 'COMPANY'),
     ...r(['employees'], ['view'], 'COMPANY'),
+    ...r(['subscription'], ['view'], 'COMPANY'),
   ] },
   { key: 'department_manager', name: 'Department Manager', grants: [
     ...r(['employees'], ['view'], 'DEPARTMENT'),

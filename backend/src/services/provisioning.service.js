@@ -34,7 +34,7 @@ export function validateSlug(slug) {
  */
 export async function provisionTenant({
   slug, name, legalName, industry, planCode, billingCycle = 'MONTHLY', trial = true,
-  owner, actor = { type: 'SYSTEM' }, req,
+  owner, actor = { type: 'SYSTEM' }, req, status = 'ACTIVE', transactionHook,
 }) {
   validateSlug(slug);
   const result = await systemDb.transaction(async (transaction) => {
@@ -42,7 +42,7 @@ export async function provisionTenant({
     const plan = await sys.Plan.findOne({ where: { code: planCode, status: 'ACTIVE' }, transaction });
     if (!plan) throw NotFound('Plan');
 
-    const tenant = await sys.Tenant.create({ slug, name, legalName, industry, status: 'ACTIVE' }, { transaction });
+    const tenant = await sys.Tenant.create({ slug, name, legalName, industry, status }, { transaction });
     const tenantId = tenant.id;
 
     await sys.TenantDomain.create({
@@ -87,10 +87,11 @@ export async function provisionTenant({
       after: { slug, name, plan: plan.code, billingCycle, ownerEmail: owner.email }, req,
     });
 
-    return { tenant, owner: user, subscription, invitationToken, hostname: `${slug}.${env.ROOT_DOMAIN}` };
+    const extra = transactionHook ? await transactionHook({ transaction, tenant, user }) : {};
+    return { tenant, owner: user, subscription, invitationToken, hostname: `${slug}.${env.ROOT_DOMAIN}`, ...extra };
   });
 
-  await enqueueEmail({
+  if (status === 'ACTIVE') await enqueueEmail({
     tenantId: result.tenant.id,
     to: owner.email,
     template: result.invitationToken ? 'tenant.invitation' : 'tenant.welcome',

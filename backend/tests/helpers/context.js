@@ -3,7 +3,7 @@ import pg from 'pg';
 import request from 'supertest';
 import { migrate } from '../../src/database/migrate.js';
 import * as db from '../../src/database/index.js';
-import { seedReference, seedSuperAdmin } from '../../src/database/seeds/run.js';
+import { seedReference, seedSuperAdmin, seedCmsDefaults } from '../../src/database/seeds/run.js';
 import { createApp } from '../../src/app.js';
 import { provisionTenant } from '../../src/services/provisioning.service.js';
 import { hashPassword } from '../../src/services/password.service.js';
@@ -25,6 +25,7 @@ export async function resetDatabase() {
   await redis.flushdb();
   await seedReference(db);
   await seedSuperAdmin(db, ADMIN);
+  await seedCmsDefaults(db);
 }
 
 export const app = createApp();
@@ -58,8 +59,21 @@ export const as = (slug, token) => {
 };
 export const asAdmin = (token) => {
   const wrap = (m) => (path) => api()[m](`/api/v1/admin${path}`).set('Host', 'admin.hrms.test').set('Authorization', `Bearer ${token}`);
-  return { get: wrap('get'), post: wrap('post'), patch: wrap('patch'), put: wrap('put') };
+  return { get: wrap('get'), post: wrap('post'), patch: wrap('patch'), put: wrap('put'), delete: wrap('delete') };
 };
+export const pub = () => {
+  const wrap = (m) => (path) => api()[m](`/api/v1/public${path}`).set('Host', 'www.yourhrms.com');
+  return { get: wrap('get'), post: wrap('post') };
+};
+
+/** Create an extra platform staff member with given role keys and return a token. */
+export async function staffToken(email, roleKey) {
+  const u = await db.sys.PlatformUser.create({ email, fullName: email, passwordHash: await hashPassword(PASSWORD) });
+  const role = await db.sys.PlatformRole.findOne({ where: { key: roleKey } });
+  await db.sys.PlatformUserRole.create({ userId: u.id, roleId: role.id });
+  const res = await api().post('/api/v1/admin/auth/login').set('Host', 'admin.hrms.test').send({ email, password: PASSWORD });
+  return res.body.data.accessToken;
+}
 
 /** Create an ACTIVE user with given role keys (and optionally linked employee) directly in the DB. */
 export async function makeUser(tenantId, { email, roles, employeeId = null }) {

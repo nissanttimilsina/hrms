@@ -40,6 +40,30 @@ const schema = z.object({
   PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().positive().default(30),
 
   ENABLE_API_DOCS: bool(true),
+
+  // Public URLs (used in emails, payment return URLs)
+  APP_URL: z.string().url().default('https://app.yourhrms.com'),
+  MARKETING_URL: z.string().url().default('https://www.yourhrms.com'),
+  ADMIN_URL: z.string().url().default('https://admin.yourhrms.com'),
+
+  // Email (SMTP). EMAIL_TRANSPORT=log prints instead of sending (development).
+  EMAIL_TRANSPORT: z.enum(['log', 'smtp']).default('log'),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().default(587),
+  SMTP_SECURE: bool(false),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  EMAIL_FROM: z.string().default('Lishnu HRMS <no-reply@yourhrms.com>'),
+  SALES_NOTIFY_EMAIL: z.string().email().optional(),
+
+  // Payment providers (credentials supplied by Lishnu Tech; sandbox defaults are public test values)
+  PAYMENTS_ENABLED: z.string().default('BANK_TRANSFER'), // comma list: ESEWA,KHALTI,BANK_TRANSFER
+  ESEWA_PRODUCT_CODE: z.string().default('EPAYTEST'),
+  ESEWA_SECRET_KEY: z.string().default('8gBm/:&EnhH.1/q'),
+  ESEWA_FORM_URL: z.string().url().default('https://rc-epay.esewa.com.np/api/epay/main/v2/form'),
+  ESEWA_STATUS_URL: z.string().url().default('https://rc.esewa.com.np/api/epay/transaction/status/'),
+  KHALTI_SECRET_KEY: z.string().optional(),
+  KHALTI_BASE_URL: z.string().url().default('https://dev.khalti.com/api/v2'),
 });
 
 const parsed = schema.safeParse(process.env);
@@ -49,9 +73,24 @@ if (!parsed.success) {
   process.exit(1);
 }
 
+if (parsed.data.NODE_ENV === 'production') {
+  const enabled = parsed.data.PAYMENTS_ENABLED.toUpperCase();
+  const problems = [];
+  if (enabled.includes('ESEWA') && (parsed.data.ESEWA_PRODUCT_CODE === 'EPAYTEST' || parsed.data.ESEWA_FORM_URL.includes('rc-epay'))) problems.push('eSewa is enabled with sandbox settings');
+  if (enabled.includes('KHALTI') && (!parsed.data.KHALTI_SECRET_KEY || parsed.data.KHALTI_BASE_URL.includes('dev.khalti'))) problems.push('Khalti is enabled without live credentials');
+  if (!parsed.data.COOKIE_SECURE) problems.push('COOKIE_SECURE must be true');
+  if (parsed.data.EMAIL_TRANSPORT !== 'smtp') problems.push('EMAIL_TRANSPORT must be smtp');
+  if (problems.length) {
+    // eslint-disable-next-line no-console
+    console.error(`Refusing to start in production:\n - ${problems.join('\n - ')}`);
+    process.exit(1);
+  }
+}
+
 export const env = Object.freeze({
   ...parsed.data,
   isProd: parsed.data.NODE_ENV === 'production',
   isTest: parsed.data.NODE_ENV === 'test',
+  paymentProviders: parsed.data.PAYMENTS_ENABLED.split(',').map((s) => s.trim().toUpperCase()).filter(Boolean),
   corsOrigins: parsed.data.CORS_ORIGINS.split(',').map((s) => s.trim()).filter(Boolean),
 });

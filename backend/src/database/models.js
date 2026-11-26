@@ -146,6 +146,42 @@ export function defineModels(sequelize) {
     before: J, after: J, ip: S, userAgent: T, requestId: S,
   }, createdOnly('audit_logs'));
 
+  // ---------------------------------------------------------------- commercial (004)
+  const PlatformSetting = sequelize.define('PlatformSetting', { key: { type: S, primaryKey: true }, value: J }, opts('platform_settings', { createdAt: false }));
+  const Lead = sequelize.define('Lead', {
+    id, source: S, status: S, name: S, company: S, email: S, phone: S, industry: S, employeeCount: I, branchCount: I,
+    modules: DataTypes.ARRAY(DataTypes.TEXT), interestedPlan: S, message: T, preferredAt: D, demoAt: D, followUpAt: D,
+    assignedTo: U, estimatedValue: M, lostReason: T, convertedTenantId: U, utm: J, ip: S,
+  }, opts('leads'));
+  const LeadActivity = sequelize.define('LeadActivity', { id, leadId: U, type: S, body: T, meta: J, actorId: U }, createdOnly('lead_activities'));
+  const NewsletterSubscriber = sequelize.define('NewsletterSubscriber', { id, email: S, unsubscribedAt: D }, createdOnly('newsletter_subscribers'));
+  const CmsEntry = sequelize.define('CmsEntry', {
+    id, type: S, slug: S, locale: S, title: S, summary: T, body: T, data: J, seo: J, status: S, publishAt: D, sortOrder: I, authorId: U,
+  }, opts('cms_entries'));
+  const Coupon = sequelize.define('Coupon', {
+    id, code: S, description: T, percentOff: DataTypes.DECIMAL(5, 2), amountOff: M, planCodes: DataTypes.ARRAY(DataTypes.TEXT),
+    billingCycles: DataTypes.ARRAY(DataTypes.TEXT), validFrom: D, validUntil: D, maxRedemptions: I, redemptions: I, isActive: B,
+  }, createdOnly('coupons'));
+  const Invoice = sequelize.define('Invoice', {
+    id, tenantId, subscriptionId: U, number: S, status: S, kind: S, currency: S, subtotal: M, discount: M,
+    taxRate: DataTypes.DECIMAL(5, 2), tax: M, total: M, couponCode: S, targetPlanId: U, targetCycle: S, periodStart: D, periodEnd: D,
+    billTo: J, issuedAt: D, dueAt: D, paidAt: D, voidedAt: D, voidReason: T, relatedInvoiceId: U,
+  }, opts('invoices'));
+  const InvoiceItem = sequelize.define('InvoiceItem', {
+    id, tenantId, invoiceId: U, description: T, quantity: DataTypes.DECIMAL(10, 2), unitAmount: M, amount: M,
+  }, noTs('invoice_items'));
+  const Payment = sequelize.define('Payment', {
+    id, tenantId, invoiceId: U, provider: S, status: S, amount: M, currency: S, reference: S, providerRef: S,
+    providerData: J, proofNote: T, failureReason: T, verifiedBy: U, verifiedAt: D,
+  }, opts('payments'));
+  const SupportTicket = sequelize.define('SupportTicket', {
+    id, tenantId, number: { type: DataTypes.BIGINT, autoIncrement: true }, subject: S, category: S, priority: S, status: S,
+    createdBy: U, assignedTo: U, firstResponseDueAt: D, firstRespondedAt: D, resolvedAt: D, satisfaction: I,
+  }, opts('support_tickets'));
+  const SupportMessage = sequelize.define('SupportMessage', {
+    id, tenantId, ticketId: U, authorType: S, authorId: U, body: T, isInternal: B,
+  }, createdOnly('support_messages'));
+
   // ---------------------------------------------------------------- associations
   PlatformUser.belongsToMany(PlatformRole, { through: PlatformUserRole, foreignKey: 'userId', otherKey: 'roleId', as: 'roles' });
   PlatformRole.belongsToMany(PlatformPermission, { through: PlatformRolePermission, foreignKey: 'roleId', otherKey: 'permissionId', as: 'permissions' });
@@ -157,6 +193,7 @@ export function defineModels(sequelize) {
   RolePermission.belongsTo(Permission, { foreignKey: 'permissionId', as: 'permission' });
   User.belongsToMany(Role, { through: UserRole, foreignKey: 'userId', otherKey: 'roleId', as: 'roles' });
   User.belongsTo(Employee, { foreignKey: 'employeeId', as: 'employee' });
+  User.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
 
   Plan.hasMany(PlanPrice, { foreignKey: 'planId', as: 'prices' });
   Plan.hasMany(PlanEntitlement, { foreignKey: 'planId', as: 'entitlements' });
@@ -168,7 +205,17 @@ export function defineModels(sequelize) {
   Employee.belongsTo(Department, { foreignKey: 'departmentId', as: 'department' });
   Employee.belongsTo(Employee, { foreignKey: 'managerId', as: 'manager' });
 
+  Lead.hasMany(LeadActivity, { foreignKey: 'leadId', as: 'activities' });
+  Invoice.hasMany(InvoiceItem, { foreignKey: 'invoiceId', as: 'items' });
+  Invoice.hasMany(Payment, { foreignKey: 'invoiceId', as: 'payments' });
+  Invoice.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
+  Payment.belongsTo(Invoice, { foreignKey: 'invoiceId', as: 'invoice' });
+  Payment.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
+  SupportTicket.hasMany(SupportMessage, { foreignKey: 'ticketId', as: 'messages' });
+  SupportTicket.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
+
   return {
+    PlatformSetting, Lead, LeadActivity, NewsletterSubscriber, CmsEntry, Coupon, Invoice, InvoiceItem, Payment, SupportTicket, SupportMessage,
     PlatformUser, PlatformRole, PlatformPermission, PlatformRolePermission, PlatformUserRole,
     AuthSession, AuthActionToken, Tenant, TenantDomain, TenantSetting, Branch, Department, Employee,
     User, Permission, Role, RolePermission, UserRole, TenantInvitation, FeatureCatalog, Plan, PlanPrice,

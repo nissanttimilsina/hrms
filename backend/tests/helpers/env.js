@@ -10,3 +10,7 @@ process.env.APP_HOST = 'app.hrms.test';
 process.env.ADMIN_HOST = 'admin.hrms.test';
 process.env.COOKIE_SECURE = 'false';
 process.env.TRUST_PROXY = '0';
+process.env.PAYMENTS_ENABLED = 'ESEWA,KHALTI,BANK_TRANSFER';
+process.env.KHALTI_SECRET_KEY ??= 'test_secret_key_khalti';
+process.env.APP_URL = 'https://app.hrms.test';
+process.env.MARKETING_URL = 'https://www.hrms.test';

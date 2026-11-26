@@ -14,9 +14,9 @@ const ctxKey = (tenantId) => `tenantctx:${tenantId}`;
 const LIVE = ['TRIAL', 'ACTIVE', 'PAST_DUE', 'GRACE_PERIOD', 'SUSPENDED'];
 const DAY = 86_400_000;
 
-export const addPeriod = (from, cycle) => {
+export const addPeriod = (from, cycle, direction = 1) => {
   const d = new Date(from);
-  d.setUTCMonth(d.getUTCMonth() + (cycle === 'ANNUAL' ? 12 : 1));
+  d.setUTCMonth(d.getUTCMonth() + direction * (cycle === 'ANNUAL' ? 12 : 1));
   return d;
 };
 

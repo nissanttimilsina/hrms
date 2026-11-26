@@ -85,6 +85,7 @@ async function checkLockAndVerify(user, password, update) {
 
 export async function loginTenant({ tenantId, email, password, req }) {
   const tenant = await sys.Tenant.findByPk(tenantId, { attributes: ['status'] });
+  if (tenant?.status === 'PENDING') throw Forbidden('Please confirm your email address to activate this workspace.', 'EMAIL_NOT_VERIFIED');
   if (tenant?.status !== 'ACTIVE') throw Forbidden('This workspace is not available', 'TENANT_BLOCKED');
   const user = await withTenant(tenantId, async (t) => {
     const u = await app.User.findOne({ where: { email }, transaction: t });
@@ -196,7 +197,10 @@ export async function requestPasswordReset({ subjectType, tenantId = null, email
     subjectType, userId: user.id, tenantId, purpose: 'PASSWORD_RESET', tokenHash: sha256(token),
     expiresAt: new Date(Date.now() + env.PASSWORD_RESET_TTL_MINUTES * 60_000),
   });
-  await enqueueEmail({ tenantId, to: user.email, template: 'auth.password_reset', data: { token } });
+  const base = subjectType === 'TENANT'
+    ? `https://${(await sys.Tenant.findByPk(tenantId)).slug}.${env.ROOT_DOMAIN}`
+    : env.ADMIN_URL;
+  await enqueueEmail({ tenantId, to: user.email, template: 'auth.password_reset', data: { url: `${base}/reset-password?token=${token}` } });
 }
 
 export async function resetPassword({ token, password, subjectType, tenantId = null, req }) {

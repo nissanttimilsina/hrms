@@ -7,7 +7,8 @@
  * No credentials are hard-coded.
  */
 import { fileURLToPath } from 'node:url';
-import { FEATURES, PLANS, PERMISSIONS, PLATFORM_PERMISSIONS, PLATFORM_ROLES } from './catalog.js';
+import { FEATURES, PLANS, PERMISSIONS, PLATFORM_PERMISSIONS, PLATFORM_ROLES, DEFAULT_ROLES } from './catalog.js';
+import { CMS_DEFAULTS } from './cms-content.js';
 
 export async function seedReference({ sys, systemDb }) {
   await systemDb.transaction(async (transaction) => {
@@ -15,7 +16,10 @@ export async function seedReference({ sys, systemDb }) {
 
     await sys.FeatureCatalog.bulkCreate(
       FEATURES.map(([key, name, category, isCore], i) => ({ key, name, category, isCore, sortOrder: i })), o);
+    const before = new Set((await sys.Permission.findAll({ attributes: ['key'], transaction, raw: true })).map((p) => p.key));
     await sys.Permission.bulkCreate(PERMISSIONS, o);
+    const added = (await sys.Permission.findAll({ transaction })).filter((p) => before.size && !before.has(p.key));
+    if (added.length) await backfillDefaultRoles(sys, added, transaction);
     await sys.PlatformPermission.bulkCreate(PLATFORM_PERMISSIONS.map((key) => ({ key })), o);
     await sys.PlatformRole.bulkCreate(PLATFORM_ROLES.map(({ key, name }) => ({ key, name, isSystem: true })), o);
 
@@ -52,6 +56,28 @@ export async function seedReference({ sys, systemDb }) {
   });
 }
 
+/**
+ * When new permissions are added in a release, give existing tenants' *default*
+ * roles the grants their template specifies for those new permissions only —
+ * customisations of existing permissions are never touched.
+ */
+async function backfillDefaultRoles(sys, added, transaction) {
+  const { expandTemplate } = await import('../../services/rbac.service.js');
+  for (const tpl of DEFAULT_ROLES) {
+    const grants = expandTemplate(tpl.grants, added);
+    if (!grants.length) continue;
+    const roles = await sys.Role.findAll({ where: { key: tpl.key, isSystem: true }, transaction });
+    await sys.RolePermission.bulkCreate(
+      roles.flatMap((role) => grants.map((g) => ({ ...g, tenantId: role.tenantId, roleId: role.id }))),
+      { transaction, ignoreDuplicates: true },
+    );
+  }
+}
+
+export async function seedCmsDefaults({ sys }) {
+  await sys.CmsEntry.bulkCreate(CMS_DEFAULTS.map((e, i) => ({ status: 'PUBLISHED', sortOrder: i, data: {}, seo: {}, summary: null, body: null, ...e })), { ignoreDuplicates: true });
+}
+
 export async function seedSuperAdmin({ sys }, { email, password, fullName = 'Super Admin' }) {
   const { hashPassword } = await import('../../services/password.service.js');
   const existing = await sys.PlatformUser.findOne({ where: { email } });
@@ -66,7 +92,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const db = await import('../index.js');
   try {
     await seedReference(db);
-    console.log('✓ reference data seeded');
+    await seedCmsDefaults(db);
+    console.log('✓ reference data and default content seeded');
     const { SEED_SUPERADMIN_EMAIL: email, SEED_SUPERADMIN_PASSWORD: password } = process.env;
     if (email && password) {
       await seedSuperAdmin(db, { email, password });
