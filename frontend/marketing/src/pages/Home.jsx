@@ -67,7 +67,7 @@ export default function Home() {
 
       {/* hero */}
       <section className="relative overflow-hidden bg-[linear-gradient(180deg,#f4f7ff_0%,#ffffff_70%)]">
-        <Container className="grid items-center gap-14 pb-20 pt-12 sm:pt-16 lg:grid-cols-[1.02fr_1fr] lg:gap-10 lg:pb-28 lg:pt-20">
+        <Container className="grid grid-cols-1 items-center [&>*]:min-w-0 gap-14 pb-20 pt-12 sm:pt-16 lg:grid-cols-[1.02fr_1fr] lg:gap-10 lg:pb-28 lg:pt-20">
           <div className="scene-in" style={{ '--d': '0s' }}>
             <Announcement />
             <h1 className="text-[2.6rem] font-semibold leading-[1.05] tracking-[-0.035em] text-ink-900 sm:text-6xl lg:text-[4.1rem]">

@@ -39,3 +39,8 @@
   .scene-in, .scene-pop, .scene-draw, .tour-panel { animation: none !important; }
   .live-dot { animation: none; }
 }
+
+/* header dropdown: answers a hover/click, so a short drop-in is fine */
+@keyframes menu-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+.menu-in { animation: menu-in .18s cubic-bezier(.2,.7,.2,1) both; }
+@media (prefers-reduced-motion: reduce) { .menu-in { animation: none; } }

@@ -4,7 +4,7 @@ import { ICONS } from './icons.js';
 import ReactMarkdown from 'react-markdown';
 import { Button, Input, cn } from '@hrms/shared-ui';
 import { SITE, api } from '../lib/site.js';
-import { FEATURES, FEATURE_CATEGORIES } from '../content/features.js';
+import { FEATURES } from '../content/features.js';
 import { INDUSTRIES } from '../content/industries.js';
 
 export const Icon = ({ name, className = 'size-5', ...p }) => {
@@ -97,12 +97,69 @@ function MegaMenu({ label, children }) {
   const [open, setOpen] = useState(false);
   const { pathname } = useLocation();
   useEffect(() => setOpen(false), [pathname]);
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => e.key === 'Escape' && setOpen(false);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
   return (
-    <div className="relative" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
-      <button type="button" className="flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium text-ink-700 hover:text-ink-900" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        {label}<Icon name="ChevronDown" className="size-4" />
+    // spans the full header height so moving the pointer down to the panel never closes it
+    <div className="flex h-16 items-center" onMouseEnter={() => setOpen(true)} onMouseLeave={() => setOpen(false)}>
+      <button type="button" className={cn('flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium transition-colors', open ? 'text-ink-900' : 'text-ink-700 hover:text-ink-900')} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        {label}<Icon name="ChevronDown" className={cn('size-4 transition-transform', open && 'rotate-180')} />
       </button>
-      {open && <div className="absolute left-1/2 top-full z-40 -translate-x-1/2 pt-2">{children}</div>}
+      {open && (
+        <div className="menu-in absolute inset-x-0 top-full z-40 border-b border-line bg-white shadow-[0_24px_48px_-24px_rgba(15,23,41,.25)]">
+          <Container>{children}</Container>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const MenuItem = ({ to, icon, name, text }) => (
+  <Link to={to} className="group flex gap-3.5 rounded-xl p-3 transition-colors hover:bg-canvas">
+    <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-brand-50 text-brand-600 transition-colors group-hover:bg-brand-600 group-hover:text-white"><Icon name={icon} className="size-[18px]" /></span>
+    <span className="min-w-0">
+      <span className="block text-sm font-medium text-ink-900">{name}</span>
+      <span className="mt-0.5 block text-[13px] leading-snug text-ink-500">{text}</span>
+    </span>
+  </Link>
+);
+
+function ProductMenu() {
+  const live = FEATURES.filter((f) => f.status === 'available');
+  const soon = FEATURES.filter((f) => f.status !== 'available');
+  return (
+    <div className="grid grid-cols-[1fr_17rem] gap-8 py-6">
+      <div>
+        <p className="px-3 text-sm text-ink-500">Available today</p>
+        <div className="mt-2 grid grid-cols-2 gap-x-4">
+          {live.map((f) => <MenuItem key={f.slug} to={`/features/${f.slug}`} icon={f.icon} name={f.name} text={f.tagline} />)}
+        </div>
+      </div>
+      <div className="flex flex-col rounded-2xl bg-canvas p-5">
+        <p className="text-sm text-ink-500">On the roadmap</p>
+        <ul className="mt-3 space-y-2 text-sm">
+          {soon.map((f) => <li key={f.slug}><Link to={`/features/${f.slug}`} className="text-ink-700 hover:text-ink-900">{f.name}</Link></li>)}
+        </ul>
+        <div className="mt-auto space-y-2 border-t border-line pt-4 text-sm font-medium">
+          <Link to="/features" className="flex items-center gap-1.5 text-brand-700 hover:text-brand-600">All features<Icon name="ArrowRight" className="size-4" /></Link>
+          <Link to="/pricing" className="flex items-center gap-1.5 text-brand-700 hover:text-brand-600">Compare plans<Icon name="ArrowRight" className="size-4" /></Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function IndustriesMenu() {
+  return (
+    <div className="py-6">
+      <p className="px-3 text-sm text-ink-500">Set up for your sector</p>
+      <div className="mt-2 grid grid-cols-3 gap-x-4">
+        {INDUSTRIES.map((i) => <MenuItem key={i.slug} to={`/industries/${i.slug}`} icon={i.icon} name={i.name} text={i.headline} />)}
+      </div>
     </div>
   );
 }
@@ -120,30 +177,8 @@ export function Header() {
           {SITE.name}
         </Link>
         <nav className="hidden items-center lg:flex" aria-label="Main">
-          <MegaMenu label="Product">
-            <div className="grid w-[720px] grid-cols-3 gap-1 rounded-xl border border-line bg-white p-4 shadow-pop">
-              {FEATURE_CATEGORIES.map((cat) => (
-                <div key={cat} className="p-2">
-                  <p className="mb-1 px-2 text-xs font-medium text-ink-400">{cat}</p>
-                  {FEATURES.filter((f) => f.category === cat).map((f) => (
-                    <Link key={f.slug} to={`/features/${f.slug}`} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-ink-700 hover:bg-subtle">
-                      <Icon name={f.icon} className="size-4 text-brand-600" />{f.name}
-                    </Link>
-                  ))}
-                </div>
-              ))}
-              <Link to="/features" className="col-span-3 mt-1 rounded-md bg-subtle px-3 py-2 text-sm font-medium text-brand-700">See all features →</Link>
-            </div>
-          </MegaMenu>
-          <MegaMenu label="Industries">
-            <div className="grid w-[520px] grid-cols-2 gap-1 rounded-xl border border-line bg-white p-3 shadow-pop">
-              {INDUSTRIES.map((i) => (
-                <Link key={i.slug} to={`/industries/${i.slug}`} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-ink-700 hover:bg-subtle">
-                  <Icon name={i.icon} className="size-4 text-brand-600" />{i.name}
-                </Link>
-              ))}
-            </div>
-          </MegaMenu>
+          <MegaMenu label="Product"><ProductMenu /></MegaMenu>
+          <MegaMenu label="Industries"><IndustriesMenu /></MegaMenu>
           <NavLink to="/pricing" className={navCls}>Pricing</NavLink>
           <NavLink to="/customers" className={navCls}>Customers</NavLink>
           <NavLink to="/resources" className={navCls}>Resources</NavLink>
