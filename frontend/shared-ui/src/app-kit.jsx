@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge, Button, Dialog, Field, Input, Select, Textarea, Checkbox, useToast, cn } from './index.js';
 import { qs } from './api.js';
@@ -39,10 +39,53 @@ function useAction(fn, { success, invalidate = [], onDone } = {}) {
 
 // --------------------------------------------------------------------------- generic form dialog
 /**
- * fields: [{ name, label, type: text|number|email|password|textarea|select|checkbox|multiselect|date|datetime|json|tags, options, required, hint, span }]
+ * Select with an inline "+ New" action: type a name, it is created and selected without leaving the form.
+ * create: { label: 'department', onCreate: async (name) => ({ value, label }) }
+ */
+function CreatableSelect({ value, onChange, options, placeholder, create, id, invalid, ...aria }) {
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const save = async () => {
+    if (name.trim().length < 2) { setErr('Enter at least 2 characters'); return; }
+    setBusy(true); setErr('');
+    try {
+      const o = await create.onCreate(name.trim());
+      onChange(o.value); setAdding(false); setName('');
+    } catch (e) { setErr(Object.values(e.fieldErrors ?? {})[0] || e.message || 'Could not add it'); } finally { setBusy(false); }
+  };
+  if (adding) {
+    return (
+      <div>
+        <div className="flex gap-2">
+          <Input id={id} autoFocus value={name} placeholder={`New ${create.label} name`} invalid={!!err} onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } if (e.key === 'Escape') { e.stopPropagation(); setAdding(false); } }} />
+          <Button type="button" size="md" className="shrink-0" loading={busy} onClick={save}>Add</Button>
+          <Button type="button" size="md" variant="ghost" className="shrink-0" onClick={() => { setAdding(false); setErr(''); }}>Cancel</Button>
+        </div>
+        {err && <p role="alert" className="mt-1.5 text-xs font-medium text-danger-600">{err}</p>}
+      </div>
+    );
+  }
+  return (
+    <div className="flex gap-2">
+      <Select id={id} invalid={invalid} {...aria} value={value} onChange={(e) => onChange(e.target.value)} options={options} placeholder={placeholder} />
+      <Button type="button" variant="secondary" size="md" className="shrink-0" onClick={() => setAdding(true)} aria-label={`Add a new ${create.label}`}>+ New</Button>
+    </div>
+  );
+}
+
+/**
+ * fields: [{ name, label, type: text|number|email|password|textarea|select|checkbox|multiselect|date|datetime|json|tags,
+ *            options, required, hint, span, section, create, emptyHint, placeholder }]
+ *  - section: starts a titled group before this field
+ *  - create (select only): adds an inline "+ New" action
+ *  - emptyHint (select only): shown instead of the hint when there is nothing to choose yet
  */
 export function FormDialog({ open, onClose, title, description, fields, initial = {}, onSubmit, submitLabel = 'Save', loading, error, onChange }) {
   const [v, setV] = useState(initial);
+  const formId = useId();
   useEffect(() => { if (open) setV(initial); }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { onChange?.(v); }, [v]); // eslint-disable-line react-hooks/exhaustive-deps
   const errs = error?.fieldErrors ?? {};
@@ -61,26 +104,38 @@ export function FormDialog({ open, onClose, title, description, fields, initial 
     onSubmit(out);
   };
   return (
-    <Dialog open={open} onClose={onClose} title={title} description={description} size="lg">
-      <form onSubmit={submit} className="grid gap-4 sm:grid-cols-2" noValidate>
-        {fields.map((f) => {
+    <Dialog open={open} onClose={onClose} title={title} description={description} size="lg"
+      footer={<>
+        <Button variant="secondary" onClick={onClose}>Cancel</Button>
+        <Button type="submit" form={formId} loading={loading}>{submitLabel}</Button>
+      </>}>
+      <form id={formId} onSubmit={submit} className="grid gap-x-4 gap-y-4 sm:grid-cols-2" noValidate>
+        {error?.code === 'VALIDATION_ERROR' && !Object.keys(errs).length && <p role="alert" className="rounded-md bg-danger-50 px-3 py-2 text-sm text-danger-700 sm:col-span-2">{error.message}</p>}
+        {fields.map((f, i) => {
           const val = v[f.name] ?? '';
           const set = (x) => setV((p) => ({ ...p, [f.name]: x }));
+          const emptySelect = f.type === 'select' && !f.options?.length;
           const ctl = f.type === 'textarea' ? <Textarea rows={f.rows ?? 4} value={val} onChange={(e) => set(e.target.value)} />
             : f.type === 'json' ? <Textarea rows={5} className="font-mono text-xs" value={typeof val === 'string' ? val : JSON.stringify(val, null, 2)} onChange={(e) => set(e.target.value)} />
-              : f.type === 'select' ? <Select value={val} onChange={(e) => set(e.target.value)} options={f.options} placeholder={f.placeholder} />
-                : f.type === 'checkbox' ? <Checkbox label={f.checkLabel ?? f.label} checked={!!val} onChange={(e) => set(e.target.checked)} />
-                  : f.type === 'multiselect' ? (
-                    <div className="grid max-h-56 gap-1 overflow-auto rounded-md border border-line p-2 sm:grid-cols-2" role="group" aria-label={f.label}>
-                      {f.options.map((o) => <Checkbox key={o.value} label={o.label} checked={(val || []).includes(o.value)} onChange={(e) => set(e.target.checked ? [...(val || []), o.value] : (val || []).filter((x) => x !== o.value))} />)}
-                    </div>)
-                  : <Input type={f.type === 'datetime' ? 'datetime-local' : f.type ?? 'text'} value={f.type === 'tags' && Array.isArray(val) ? val.join(', ') : val} onChange={(e) => set(e.target.value)} />;
-          return <Field key={f.name} label={f.type === 'checkbox' ? undefined : f.label} required={f.required} hint={f.hint} error={errs[f.name]} className={cn(f.span !== 1 && (f.type === 'textarea' || f.type === 'json' || f.type === 'multiselect' || f.span === 2) && 'sm:col-span-2')}>{ctl}</Field>;
+              : f.type === 'select' && f.create ? <CreatableSelect value={val} onChange={set} options={f.options} placeholder={f.placeholder ?? 'Select'} create={f.create} />
+                : f.type === 'select' ? <Select value={val} onChange={(e) => set(e.target.value)} options={f.options} placeholder={f.placeholder} disabled={emptySelect && !!f.emptyHint} />
+                  : f.type === 'checkbox' ? <Checkbox label={f.checkLabel ?? f.label} checked={!!val} onChange={(e) => set(e.target.checked)} />
+                    : f.type === 'multiselect' ? (
+                      <div className="grid max-h-56 gap-1 overflow-auto rounded-md border border-line p-2 sm:grid-cols-2" role="group" aria-label={f.label}>
+                        {f.options.map((o) => <Checkbox key={o.value} label={o.label} checked={(val || []).includes(o.value)} onChange={(e) => set(e.target.checked ? [...(val || []), o.value] : (val || []).filter((x) => x !== o.value))} />)}
+                      </div>)
+                      : <Input type={f.type === 'datetime' ? 'datetime-local' : f.type ?? 'text'} value={f.type === 'tags' && Array.isArray(val) ? val.join(', ') : val} placeholder={f.placeholder} onChange={(e) => set(e.target.value)} />;
+          const wide = f.span !== 1 && (f.type === 'textarea' || f.type === 'json' || f.type === 'multiselect' || f.span === 2);
+          return [
+            f.section && (
+              <div key={`s-${f.name}`} className={cn('sm:col-span-2', i > 0 && 'mt-3 border-t border-line pt-5')}>
+                <h3 className="text-sm font-semibold text-ink-900">{f.section}</h3>
+                {f.sectionHint && <p className="mt-0.5 text-sm text-ink-500">{f.sectionHint}</p>}
+              </div>
+            ),
+            <Field key={f.name} label={f.type === 'checkbox' ? undefined : f.label} required={f.required} hint={emptySelect && f.emptyHint && !f.create ? f.emptyHint : f.hint} error={errs[f.name]} className={cn(wide && 'sm:col-span-2')}>{ctl}</Field>,
+          ];
         })}
-        <div className="flex justify-end gap-2 sm:col-span-2">
-          <Button variant="secondary" onClick={onClose}>Cancel</Button>
-          <Button type="submit" loading={loading}>{submitLabel}</Button>
-        </div>
       </form>
     </Dialog>
   );
@@ -109,7 +164,7 @@ export function Filters({ list, search = true, selects = [] }) {
   return (
     <div className="mb-4 flex flex-wrap gap-2">
       {search && <Input placeholder="Search…" className="max-w-xs" defaultValue={list.params.search ?? ''} onChange={(e) => list.set({ search: e.target.value || undefined })} aria-label="Search" />}
-      {selects.map((s) => <Select key={s.name} className="w-44" value={list.params[s.name] ?? ''} placeholder={s.label} options={s.options.map((o) => (typeof o === 'string' ? { value: o, label: o.replace(/_/g, ' ').toLowerCase() } : o))} onChange={(e) => list.set({ [s.name]: e.target.value || undefined })} aria-label={s.label} />)}
+      {selects.map((s) => <div key={s.name} className="w-44"><Select value={list.params[s.name] ?? ''} placeholder={s.label} options={s.options.map((o) => (typeof o === 'string' ? { value: o, label: o.replace(/_/g, ' ').toLowerCase() } : o))} onChange={(e) => list.set({ [s.name]: e.target.value || undefined })} aria-label={s.label} /></div>)}
     </div>
   );
 }

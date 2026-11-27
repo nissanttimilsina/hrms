@@ -11,17 +11,48 @@ export const useOrg = () => {
   const opt = (q) => (q.data ?? []).map((x) => ({ value: x.id, label: x.name }));
   return { branches: opt(b), departments: opt(d), designations: opt(g), nameOf: (list, id) => list.find((x) => x.value === id)?.label ?? '—' };
 };
-const TYPES = ['PERMANENT', 'PROBATION', 'CONTRACT', 'PART_TIME', 'INTERN', 'DAILY_WAGE'].map((x) => ({ value: x, label: x.replace('_', ' ').toLowerCase() }));
+const label = (x) => x.charAt(0) + x.slice(1).toLowerCase().replace(/_/g, ' ');
+const TYPES = ['PERMANENT', 'PROBATION', 'CONTRACT', 'PART_TIME', 'INTERN', 'DAILY_WAGE'].map((x) => ({ value: x, label: label(x) }));
+const GENDERS = [['FEMALE', 'Female'], ['MALE', 'Male'], ['OTHER', 'Other'], ['UNDISCLOSED', 'Prefer not to say']].map(([value, l]) => ({ value, label: l }));
 const STATUSES = ['ACTIVE', 'PROBATION', 'ON_NOTICE', 'SUSPENDED', 'TERMINATED'];
+const deptCode = (name) => name.toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 20) || 'DEPT';
 
-const employeeFields = (org, managers) => [
-  { name: 'firstName', label: 'First name', required: true }, { name: 'lastName', label: 'Last name', required: true },
-  { name: 'workEmail', label: 'Work email', type: 'email' }, { name: 'phone', label: 'Mobile' },
-  { name: 'joinedOn', label: 'Joining date', type: 'date', required: true }, { name: 'employmentType', label: 'Employment type', type: 'select', options: TYPES },
-  { name: 'branchId', label: 'Branch', type: 'select', options: org.branches, placeholder: '—' }, { name: 'departmentId', label: 'Department', type: 'select', options: org.departments, placeholder: '—' },
-  { name: 'designationId', label: 'Designation', type: 'select', options: org.designations, placeholder: '—' }, { name: 'managerId', label: 'Reporting manager', type: 'select', options: managers, placeholder: '—' },
-  { name: 'gender', label: 'Gender', type: 'select', placeholder: '—', options: ['FEMALE', 'MALE', 'OTHER', 'UNDISCLOSED'].map((x) => ({ value: x, label: x.toLowerCase() })) },
-  { name: 'dateOfBirth', label: 'Date of birth', type: 'date' }, { name: 'pan', label: 'PAN (9 digits)' }, { name: 'ssfId', label: 'SSF ID' }, { name: 'biometricId', label: 'Biometric device ID', hint: 'The ID this person is enrolled under on attendance devices' },
+/** Inline "+ New" for departments and designations inside employee forms (only for people allowed to create them). */
+export function useOrgCreators() {
+  const a = useAuth();
+  const qc = useQueryClient();
+  if (!a.can('departments:create')) return {};
+  const make = (path, key, body) => async (name) => {
+    const existing = (qc.getQueryData([key]) ?? []).find((x) => x.name.toLowerCase() === name.toLowerCase());
+    if (existing) return { value: existing.id, label: existing.name }; // already there: just select it
+    let r;
+    for (let n = 1; ; n += 1) {
+      try { r = await api.post(path, body(name, n)); break; } catch (e) { if (e.status !== 409 || n >= 5) throw e; } // code taken: try NAME-2, NAME-3
+    }
+    await qc.invalidateQueries({ queryKey: [key] });
+    return { value: r.id, label: r.name };
+  };
+  return {
+    department: { label: 'department', onCreate: make('/departments', 'departments', (name, n) => ({ name, code: n > 1 ? `${deptCode(name).slice(0, 17)}-${n}` : deptCode(name) })) },
+    designation: { label: 'designation', onCreate: make('/designations', 'designations', (name) => ({ name })) },
+  };
+}
+
+const employeeFields = (org, managers, creators = {}) => [
+  { section: 'Basic details', name: 'firstName', label: 'First name', required: true }, { name: 'lastName', label: 'Last name', required: true },
+  { name: 'workEmail', label: 'Work email', type: 'email', placeholder: 'name@company.com', hint: 'Used to invite them to the app' }, { name: 'phone', label: 'Mobile', placeholder: '98XXXXXXXX' },
+
+  { section: 'Job', name: 'joinedOn', label: 'Joining date', type: 'date', required: true }, { name: 'employmentType', label: 'Employment type', type: 'select', options: TYPES },
+  { name: 'branchId', label: 'Branch', type: 'select', options: org.branches, placeholder: 'Select branch' },
+  { name: 'departmentId', label: 'Department', type: 'select', options: org.departments, placeholder: 'Not set', create: creators.department, emptyHint: 'No departments yet. Add them under Organization.' },
+  { name: 'designationId', label: 'Designation', type: 'select', options: org.designations, placeholder: 'Not set', create: creators.designation, emptyHint: 'No designations yet. Add them under Organization.' },
+  { name: 'managerId', label: 'Reporting manager', type: 'select', options: managers, placeholder: 'No manager', emptyHint: 'No other employees yet. Add the manager first, then set this from their profile.' },
+
+  { section: 'Personal', name: 'gender', label: 'Gender', type: 'select', placeholder: 'Not set', options: GENDERS },
+  { name: 'dateOfBirth', label: 'Date of birth', type: 'date' },
+
+  { section: 'Tax and attendance', sectionHint: 'Needed for payroll and fingerprint devices. You can add these later.', name: 'pan', label: 'PAN', placeholder: '9 digits' }, { name: 'ssfId', label: 'SSF ID' },
+  { name: 'biometricId', label: 'Biometric device ID', hint: 'The ID this person is enrolled under on the attendance device' },
 ];
 const clean = (b) => Object.fromEntries(Object.entries(b).map(([k, v]) => [k, v === '' ? null : v]).filter(([k, v]) => !(v === null && ['firstName', 'lastName', 'joinedOn'].includes(k))));
 const dateOnly = (b) => ({ ...b, ...['joinedOn', 'dateOfBirth', 'contractEndOn', 'probationEndOn'].reduce((o, k) => (b[k] ? { ...o, [k]: String(b[k]).slice(0, 10) } : o), {}) });
@@ -31,6 +62,7 @@ export function Employees() {
   const a = useAuth();
   const nav = useNavigate();
   const org = useOrg();
+  const creators = useOrgCreators();
   const list = useList('/employees', { sort: 'employeeCode', order: 'asc', status: undefined });
   const { data: all } = useQuery({ queryKey: ['employees-mini'], queryFn: () => api.get('/employees?pageSize=100&sort=firstName&order=asc') });
   const managers = (all ?? []).map((e) => ({ value: e.id, label: `${e.firstName} ${e.lastName}` }));
@@ -56,8 +88,8 @@ export function Employees() {
           { key: 'status', header: 'Status', render: (r) => <StatusBadge value={r.status} /> },
           { key: 'joinedOn', header: 'Joined', sortable: true, render: (r) => dt(r.joinedOn) },
         ]} />
-      <FormDialog open={dlg === 'create'} onClose={() => setDlg(null)} title="Add employee" description="An employee ID is generated automatically." initial={{ employmentType: 'PERMANENT', joinedOn: new Date().toISOString().slice(0, 10) }}
-        fields={employeeFields(org, managers)} loading={create.isPending} error={create.error} onSubmit={(b) => create.mutate(b)} />
+      <FormDialog open={dlg === 'create'} onClose={() => setDlg(null)} title="Add employee" description="An employee ID is generated automatically." initial={{ employmentType: 'PERMANENT', joinedOn: new Date().toISOString().slice(0, 10), ...(org.branches.length === 1 && { branchId: org.branches[0].value }) }}
+        fields={employeeFields(org, managers, creators)} loading={create.isPending} error={create.error} onSubmit={(b) => create.mutate(b)} />
       {dlg === 'import' && <ImportDialog onClose={() => setDlg(null)} onDone={() => { setDlg(null); list.refetch(); }} />}
     </>
   );
@@ -104,6 +136,7 @@ export function EmployeeProfile() {
   const { id } = useParams();
   const a = useAuth();
   const org = useOrg();
+  const creators = useOrgCreators();
   const key = ['employee', id];
   const [tab, setTab] = useState('overview');
   const [dlg, setDlg] = useState(null);
@@ -141,7 +174,7 @@ export function EmployeeProfile() {
       {tab === 'salary' && <Salary id={id} />}
       {tab === 'leave' && <LeaveBalance id={id} />}
       <FormDialog open={dlg === 'edit'} onClose={() => setDlg(null)} title="Edit employee" description="Changes to branch, department, designation or status are saved to the employee's history." initial={{ ...e, effectiveOn: new Date().toISOString().slice(0, 10) }}
-        fields={[...employeeFields(org, managers), { name: 'status', label: 'Status', type: 'select', options: STATUSES.filter((s) => s !== 'TERMINATED').map((s) => ({ value: s, label: s.toLowerCase() })) }, { name: 'effectiveOn', label: 'Change effective from', type: 'date' }, { name: 'changeNote', label: 'Reason for change', type: 'textarea', rows: 2 }]}
+        fields={[...employeeFields(org, managers, creators), { section: 'Status change', name: 'status', label: 'Status', type: 'select', options: STATUSES.filter((s) => s !== 'TERMINATED').map((s) => ({ value: s, label: label(s) })) }, { name: 'effectiveOn', label: 'Change effective from', type: 'date' }, { name: 'changeNote', label: 'Reason for change', type: 'textarea', rows: 2 }]}
         loading={update.isPending} error={update.error} onSubmit={(b) => update.mutate(clean(dateOnly(b)))} />
       <FormDialog open={dlg === 'bank'} onClose={() => setDlg(null)} title="Bank account" description="The account number is encrypted and only the last 4 digits are shown afterwards." initial={{ bankName: e.bank?.bankName ?? '', accountName: e.bank?.accountName ?? fullName(e), branch: e.bank?.branch ?? '' }}
         fields={[{ name: 'bankName', label: 'Bank', required: true }, { name: 'branch', label: 'Bank branch' }, { name: 'accountName', label: 'Account name', required: true }, { name: 'accountNumber', label: 'Account number', required: true }]}

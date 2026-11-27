@@ -36,14 +36,14 @@ export function Dialog({ open, onClose, title, description, children, footer, si
         aria-modal="true"
         aria-labelledby="dlg-title"
         aria-describedby={description ? 'dlg-desc' : undefined}
-        className={cn('relative w-full rounded-lg bg-surface shadow-pop', size === 'sm' ? 'max-w-sm' : size === 'lg' ? 'max-w-2xl' : 'max-w-lg')}
+        className={cn('relative flex max-h-[calc(100dvh-2rem)] w-full flex-col rounded-xl bg-surface shadow-pop', size === 'sm' ? 'max-w-sm' : size === 'lg' ? 'max-w-2xl' : 'max-w-lg')}
       >
-        <div className={cn('px-5 pt-5', !children && 'pb-5')}>
-          <h2 id="dlg-title" className="text-base font-semibold">{title}</h2>
+        <div className={cn('shrink-0 px-6 pt-5', children ? 'pb-4' : 'pb-5', footer && children && 'border-b border-line')}>
+          <h2 id="dlg-title" className="text-lg font-semibold">{title}</h2>
           {description && <p id="dlg-desc" className="mt-1 text-sm text-ink-500">{description}</p>}
         </div>
-        {children && <div className="px-5 py-4">{children}</div>}
-        {footer && <div className="flex justify-end gap-2 border-t border-line px-5 py-3">{footer}</div>}
+        {children && <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">{children}</div>}
+        {footer && <div className="flex shrink-0 justify-end gap-2 rounded-b-xl border-t border-line bg-canvas px-6 py-3">{footer}</div>}
       </div>
     </div>,
     document.body,
