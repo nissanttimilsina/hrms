@@ -207,6 +207,35 @@ employeesRouter.post('/:id/terminate', requirePermission('employees:manage'), va
   return ok(res, presentEmployee(emp, true));
 }));
 
+/**
+ * Delete an employee created by mistake. Refused once they have been through payroll (those are
+ * legal records: record an exit instead). Their login is disabled and its email released so the
+ * same person can be added again; direct reports lose this manager. Attendance and leave rows stay
+ * attached to the deleted record and drop out of lists and reports.
+ */
+employeesRouter.delete('/:id', requirePermission('employees:manage'), validate(idParam),
+  asyncHandler(async (req, res) => {
+    await req.tx(async (t) => {
+      const e = await app.Employee.findOne({ where: { [Op.and]: [{ id: req.params.id, deletedAt: null }, scopeWhere(req.scopes, req.auth.principal)] }, transaction: t });
+      if (!e) throw NotFound('Employee');
+      if (e.id === req.auth.principal.employeeId) throw Conflict('You cannot delete your own employee record', 'SELF_DELETE');
+      if (await app.PayrollItem.count({ where: { employeeId: e.id }, transaction: t })) {
+        throw Conflict('This employee has payroll records, which must be kept. Use "Record exit" instead.', 'HAS_PAYROLL');
+      }
+      const user = await app.User.findOne({ where: { employeeId: e.id }, transaction: t });
+      if (user) {
+        if (user.id === req.auth.userId) throw Conflict('You cannot delete your own login', 'SELF_DELETE');
+        await app.TenantInvitation.destroy({ where: { email: user.email, acceptedAt: null }, transaction: t });
+        await user.update({ status: 'DISABLED', employeeId: null, email: `deleted-${user.id}@deleted.invalid` }, { transaction: t });
+      }
+      await app.Employee.update({ managerId: null }, { where: { managerId: e.id }, transaction: t });
+      await e.update({ deletedAt: new Date(), biometricId: null }, { transaction: t });
+      await audit({ transaction: t, tenantId: req.auth.tenantId, actor: tenantActor(req), action: 'employee.delete', entityType: 'employee', entityId: e.id,
+        before: { employeeCode: e.employeeCode, name: `${e.firstName} ${e.lastName}`, workEmail: e.workEmail, status: e.status, hadLogin: !!user }, req });
+    });
+    return ok(res, { deleted: true });
+  }));
+
 /** Create a login for an employee (role Employee by default) and email an invitation. */
 employeesRouter.post('/:id/invite', requirePermission('users:create'), validate({ ...idParam, body: z.object({ email: z.string().trim().toLowerCase().email().optional(), roleKey: z.string().max(60).default('employee') }).strict() }),
   asyncHandler(async (req, res) => {

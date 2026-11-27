@@ -147,6 +147,8 @@ export function EmployeeProfile() {
   const update = useAction((b) => api.patch(`/employees/${id}`, b), { success: 'Profile updated', ...done });
   const invite = useAction((b) => api.post(`/employees/${id}/invite`, b), { success: (r) => `Invitation sent to ${r.email}`, ...done });
   const terminate = useAction((b) => api.post(`/employees/${id}/terminate`, b), { success: 'Exit recorded', ...done });
+  const navigate = useNavigate();
+  const remove = useAction(() => api.del(`/employees/${id}`), { success: 'Employee deleted', invalidate: ['/employees', ['employees-mini']], onDone: () => navigate('/employees') });
   if (isPending) return <Skeleton className="h-96" />;
   const tabs = [['overview', 'Overview'], ['history', 'History'], a.can('documents:view') && ['documents', 'Documents'], a.feature('payroll') && a.can('payroll:view') && a.wide('payroll:view') && ['salary', 'Salary'], a.feature('leave') && ['leave', 'Leave balance']].filter(Boolean);
   return (
@@ -155,6 +157,7 @@ export function EmployeeProfile() {
         {a.can('employees:edit') && <Button variant="secondary" onClick={() => setDlg('edit')}>Edit</Button>}
         {a.can('users:create') && !e.user && e.status !== 'TERMINATED' && <Button variant="secondary" onClick={() => setDlg('invite')}>Give login access</Button>}
         {a.can('employees:manage') && e.status !== 'TERMINATED' && <Button variant="danger" onClick={() => setDlg('exit')}>Record exit</Button>}
+        {a.can('employees:manage') && e.id !== a.employeeId && <Button variant="ghost" className="text-danger-600 hover:bg-danger-50" onClick={() => setDlg('delete')}>Delete</Button>}
       </>} />
       <div className="mb-4 flex gap-1 overflow-x-auto border-b border-line" role="tablist">
         {tabs.map(([k, l]) => <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)} className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 text-sm font-medium ${tab === k ? 'border-brand-600 text-brand-700' : 'border-transparent text-ink-500'}`}>{l}</button>)}
@@ -184,6 +187,9 @@ export function EmployeeProfile() {
       <FormDialog open={dlg === 'exit'} onClose={() => setDlg(null)} title={`Record exit for ${fullName(e)}`} description="Their login is disabled and the seat is freed. All history is kept." initial={{ exitedOn: new Date().toISOString().slice(0, 10), reason: 'RESIGNATION' }}
         fields={[{ name: 'exitedOn', label: 'Last working day', type: 'date', required: true }, { name: 'reason', label: 'Reason', type: 'select', options: ['RESIGNATION', 'TERMINATION', 'RETIREMENT', 'CONTRACT_END', 'DEATH', 'OTHER'].map((x) => ({ value: x, label: x.replace('_', ' ').toLowerCase() })) }, { name: 'note', label: 'Notes', type: 'textarea' }]}
         submitLabel="Record exit" loading={terminate.isPending} error={terminate.error} onSubmit={(b) => terminate.mutate({ ...b, exitedOn: b.exitedOn.slice(0, 10) })} />
+      <ConfirmDialog open={dlg === 'delete'} onCancel={() => setDlg(null)} onConfirm={() => remove.mutate()} loading={remove.isPending} destructive confirmLabel="Delete employee"
+        title={`Delete ${fullName(e)}?`}
+        description={`Use this for a record added by mistake. ${e.user ? 'Their login is removed and the email can be used again. ' : ''}People who report to them will have no manager. Employees who have been paid through payroll cannot be deleted; record an exit for them instead.`} />
     </>
   );
 }
