@@ -15,7 +15,7 @@ _Last updated: 26 Nov 2026. Release candidate for the first production deploymen
 
 | Check | Result |
 |---|---|
-| Backend tests (`npm test`) | **208 passed, 0 failed** at `2e2bee8`. Stage 1 adds 14 tests in `self-service.test.js` that had not been run when the branch was pushed (see HANDOVER §3). Areas: auth, tenant isolation, RBAC, subscriptions, commercial/billing, subscription requests, HR, payroll, biometric devices, working calendar and attendance rules, reports and notices, employee deletion, tasks, daily reports, reviews and performance |
+| Backend tests (`npm test`) | **208 passed, 0 failed** at `2e2bee8`. Stage 1 adds 14 tests in `self-service.test.js`: **222 passed** in CI on pull request #1. Areas: auth, tenant isolation, RBAC, subscriptions, commercial/billing, subscription requests, HR, payroll, biometric devices, working calendar and attendance rules, reports and notices, employee deletion, tasks, daily reports, reviews and performance |
 | Dependency audit (`npm audit --omit=dev`) | 0 vulnerabilities in backend and frontend |
 | Browser end-to-end (Playwright, Chrome) | Marketing signup → email verification → active workspace. Demo request → CRM lead. Every admin portal page. Company app: sign-in, clock-in, employees, salary, payroll calculate with tax breakdown, billing, reports and Excel export, every page; mobile layout at 390 px. No console errors. |
 | Production Nginx config | Rendered from the template and tested locally: host routing, apex→www, prerendered pages with shell fallback, `/api` proxy, CSP/HSTS headers, immutable asset caching, rate limits (verified 429). Correct HTTP status codes. |

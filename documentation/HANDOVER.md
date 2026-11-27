@@ -75,7 +75,9 @@ The deploy builds the images, runs `migrate` (SQL migrations, then `seeds/run.js
 - **Email works.** It is sent through Brevo SMTP from `no-reply@lishnutech.com`; the domain is authenticated with DKIM and DMARC. Brevo's "Authorized IPs" list includes `163.61.41.51`. To test: `docker compose exec api node src/scripts/send-test-email.js you@example.com`, run in `/opt/hrms/infrastructure/docker`.
 - **Super Admin password reset:** `docker compose exec api node src/scripts/reset-platform-password.js <email>`, optionally with `NEW_PASSWORD=...` set.
 
-**Stage 1 of employee self-service (§12a)** is on branch `stage-1-self-service`, not yet in `main`. The session that wrote it could not install npm packages, so the backend tests and the frontend build were not run before the push; the migration was applied to a real PostgreSQL 16 and every file passed a syntax and undefined-name check. The next session must run `npm test` and `npm run build`, check the new pages in a browser, fix anything that fails, then merge into `main` and give the owner deploy commands.
+**Stage 1 of employee self-service (§12a)** is on branch `stage-1-self-service` (pull request #1), not yet in `main`. The session that wrote it could not install npm packages, so it used GitHub CI on the pull request: all 222 backend tests pass (208 existing + 14 new) and the frontend build passes. The new pages have **not** been checked in a browser yet. The next session should do that at desktop size and 390 px, fix anything it finds, then merge into `main` and give the owner deploy commands.
+
+**CI notes:** the nginx check failed on `main` because CI did not pass `REAL_IP_FROM`; the branch fixes that. The CI "Backup & restore drill" step also fails on `main` and on the branch: the runner's newer `pg_dump` writes `SET transaction_timeout`, which the PostgreSQL 16 service rejects. Production is not affected, because the server's backup and restore scripts run the tools inside the PostgreSQL 16 container. Fix it in CI by using version-16 client tools.
 
 **Previously delivered:** the work-management module (§12). He was given deploy steps and setup advice: set each employee's Reporting manager, and give managers the Team Leader or Department Manager role. No reply on that yet.
 
@@ -430,7 +432,7 @@ Asked for by the owner: "something professional, long term, more than other syst
 
 **Website:** Expense Management is now `available`; the Employee Self-Service page lists the new capabilities.
 
-**Tests:** `tests/self-service.test.js` (14 tests) covers the score fixes, the whole expense flow including payroll, letters including public verification and withdrawal, the tax statement, and correction cancel. Not yet run (see §3).
+**Tests:** `tests/self-service.test.js` (14 tests) covers the score fixes, the whole expense flow including payroll, letters including public verification and withdrawal, the tax statement, and correction cancel. All pass in CI.
 
 ## 13. Integrations
 
@@ -572,7 +574,7 @@ These notes describe the cloud workspace earlier sessions used. A new session ma
 - Tax slabs and SSF rates must be checked every Shrawan.
 
 **Stage 1 follow-ups:**
-- Run the tests and build for `stage-1-self-service`, check the pages at desktop size and 390 px, merge into `main`, then deploy.
+- Check the stage 1 pages in a browser at desktop size and 390 px, merge pull request #1 into `main`, then deploy.
 - After deploy, the owner should fill in the letterhead (Letter requests → Letterhead) and review expense categories and limits (Expense claims → Categories and rules).
 - Existing companies' Team Leader roles do not get expense approval automatically (see §12a).
 
