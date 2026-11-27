@@ -153,6 +153,7 @@ const TONES = {
   ACTIVE: 'success', PAID: 'success', SUCCEEDED: 'success', WON: 'success', PUBLISHED: 'success', RESOLVED: 'success',
   TRIAL: 'info', OPEN: 'info', NEW: 'info', IN_PROGRESS: 'info', INITIATED: 'info', DRAFT: 'neutral',
   PENDING: 'warning', PENDING_VERIFICATION: 'warning', GRACE_PERIOD: 'warning', PAST_DUE: 'warning', WAITING_ON_CUSTOMER: 'warning', QUALIFIED: 'brand', DEMO_SCHEDULED: 'brand', PROPOSAL: 'brand', CONTACTED: 'brand', HIGH: 'warning',
+  SUBMITTED: 'warning', MANAGER_APPROVED: 'info', APPROVED: 'success', SCHEDULED: 'info', ISSUED: 'success', REJECTED: 'danger', REVOKED: 'danger',
   SUSPENDED: 'danger', FAILED: 'danger', VOID: 'neutral', LOST: 'danger', CANCELLED: 'neutral', EXPIRED: 'danger', URGENT: 'danger', ARCHIVED: 'neutral', DISABLED: 'danger', REFUNDED: 'neutral', CLOSED: 'neutral',
 };
 export const StatusBadge = ({ value }) => (value ? <Badge tone={TONES[value] ?? 'neutral'} dot>{String(value).replace(/_/g, ' ').toLowerCase()}</Badge> : null);

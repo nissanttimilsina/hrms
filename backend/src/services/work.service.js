@@ -96,7 +96,7 @@ const pct = (a, b) => (b > 0 ? Math.round((a / b) * 100) : null);
 /**
  * Performance indicators per employee for a date range.
  *  - task delivery: completed in the period, share completed on or before the due date, overdue now
- *  - daily reports: submitted vs days present, average manager rating
+ *  - daily reports: submitted vs days present (today counts only once its report is in), average manager rating
  *  - attendance: days present, late arrivals
  *  - score (0-100): weighted mix of the indicators that have data (on-time 35, reports 25, rating 25, punctuality 15);
  *    shown only when at least two indicators have data
@@ -123,22 +123,28 @@ export async function performance(t, { ids, from, to, tz, today }) {
               coalesce(round(avg(progress) FILTER (WHERE status IN ('TODO','IN_PROGRESS','BLOCKED','IN_REVIEW'))), 0)::int AS avg_progress
          FROM tasks WHERE deleted_at IS NULL ${idFilter('assignee_id')} GROUP BY assignee_id`),
     q(`SELECT employee_id AS id, count(*) FILTER (WHERE status <> 'DRAFT')::int AS submitted,
+              count(*) FILTER (WHERE status <> 'DRAFT' AND report_date = :today)::int AS submitted_today,
               count(*) FILTER (WHERE status = 'SUBMITTED')::int AS awaiting_review,
               round(avg(rating) FILTER (WHERE rating IS NOT NULL), 2)::float AS avg_rating, count(rating)::int AS rated,
               coalesce(sum(hours) FILTER (WHERE status <> 'DRAFT'), 0)::float AS hours
          FROM work_reports WHERE report_date BETWEEN :from AND :to ${idFilter('employee_id')} GROUP BY employee_id`),
     q(`SELECT employee_id AS id, count(*) FILTER (WHERE status IN ('PRESENT','LATE','HALF_DAY'))::int AS present,
-              count(*) FILTER (WHERE status = 'LATE')::int AS late, coalesce(sum(worked_minutes), 0)::int AS worked_minutes
+              count(*) FILTER (WHERE status IN ('PRESENT','LATE','HALF_DAY') AND work_date < :today)::int AS present_closed,
+              -- A late arrival stays late even when the day ends up as a half day.
+              count(*) FILTER (WHERE status IN ('PRESENT','LATE','HALF_DAY') AND (status = 'LATE' OR late_minutes > 0))::int AS late,
+              coalesce(sum(worked_minutes), 0)::int AS worked_minutes
          FROM attendance_records WHERE work_date BETWEEN :from AND :to ${idFilter('employee_id')} GROUP BY employee_id`),
   ]);
   const by = (rows) => new Map(rows.map((r) => [r.id, r]));
   const T = by(tasks); const R = by(reports); const A = by(att);
   return emps.map((e) => {
     const tk = T.get(e.id) ?? { open: 0, overdue: 0, blocked: 0, assigned: 0, completed: 0, completed_with_due: 0, on_time: 0, avg_progress: 0 };
-    const rp = R.get(e.id) ?? { submitted: 0, awaiting_review: 0, avg_rating: null, rated: 0, hours: 0 };
-    const at = A.get(e.id) ?? { present: 0, late: 0, worked_minutes: 0 };
+    const rp = R.get(e.id) ?? { submitted: 0, submitted_today: 0, awaiting_review: 0, avg_rating: null, rated: 0, hours: 0 };
+    const at = A.get(e.id) ?? { present: 0, present_closed: 0, late: 0, worked_minutes: 0 };
     const onTimeRate = pct(tk.on_time, tk.completed_with_due);
-    const reportRate = at.present > 0 ? Math.min(100, pct(rp.submitted, at.present)) : null;
+    // Today only counts once today's report is in: the working day is not over yet.
+    const expected = at.present_closed + (rp.submitted_today > 0 ? 1 : 0);
+    const reportRate = expected > 0 ? Math.min(100, pct(rp.submitted, expected)) : null;
     const punctuality = at.present > 0 ? 100 - pct(at.late, at.present) : null;
     const ratingPct = rp.avg_rating != null ? Math.round(((rp.avg_rating - 1) / 4) * 100) : null;
     const parts = [[onTimeRate, 35], [reportRate, 25], [ratingPct, 25], [punctuality, 15]].filter(([v]) => v != null);
@@ -148,7 +154,7 @@ export async function performance(t, { ids, from, to, tz, today }) {
     return {
       employee: { id: e.id, name: `${e.first_name} ${e.last_name}`, employeeCode: e.employee_code, department: e.department, designation: e.designation },
       tasks: { open: tk.open, overdue: tk.overdue, blocked: tk.blocked, assigned: tk.assigned, completed: tk.completed, onTime: tk.on_time, onTimeRate, avgProgress: tk.avg_progress },
-      reports: { submitted: rp.submitted, awaitingReview: rp.awaiting_review, expected: at.present, rate: reportRate, avgRating: rp.avg_rating, rated: rp.rated, hours: rp.hours },
+      reports: { submitted: rp.submitted, awaitingReview: rp.awaiting_review, expected, rate: reportRate, avgRating: rp.avg_rating, rated: rp.rated, hours: rp.hours },
       attendance: { present: at.present, late: at.late, punctuality, workedHours: Math.round(at.worked_minutes / 6) / 10 },
       score,
     };

@@ -735,7 +735,7 @@ export function EmployeePerformance({ self }) {
   if (error) return <EmptyState title="Not available" description={error.message} />;
   const ind = [
     ['Tasks finished on time', pctText(d.tasks?.onTimeRate), `${d.tasks?.onTime ?? 0} of ${d.tasks?.completed ?? 0} completed with a due date`],
-    ['Daily reports', pctText(d.reports?.rate), `${d.reports?.submitted ?? 0} submitted on ${d.reports?.expected ?? 0} days at work`],
+    ['Daily reports', pctText(d.reports?.rate), `${d.reports?.submitted ?? 0} submitted for ${d.reports?.expected ?? 0} working days (today counts once its report is in)`],
     ['Average rating', d.reports?.avgRating ? `${d.reports.avgRating} / 5` : '—', `${d.reports?.rated ?? 0} report${d.reports?.rated === 1 ? '' : 's'} rated`],
     ['Punctuality', pctText(d.attendance?.punctuality), `${d.attendance?.late ?? 0} late of ${d.attendance?.present ?? 0} days`],
   ];

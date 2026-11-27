@@ -31,7 +31,7 @@ export function ClockWidget({ compact }) {
       <CardBody className={`flex flex-wrap items-center justify-between gap-4 ${compact ? '' : 'py-6'}`}>
         <div>
           <p className="text-xs font-medium uppercase tracking-wide text-ink-500">Today · {data.schedule.shiftName ?? `${data.schedule.start}–${data.schedule.end}`}</p>
-          <p className="mt-1 text-lg font-semibold">{!r ? 'Not clocked in' : r.clockOut ? `Done · ${hours(r.workedMinutes)}` : `Clocked in at ${timeOf(r.clockIn)}`}</p>
+          <p className="mt-1 text-lg font-semibold">{!r ? 'Not clocked in' : r.clockOut ? (r.workedMinutes > 0 ? `Done · ${hours(r.workedMinutes)} worked` : 'Clocked out') : `Clocked in at ${timeOf(r.clockIn)}`}</p>
           {r && <p className="text-sm text-ink-500">In {timeOf(r.clockIn)} · Out {timeOf(r.clockOut)} {r.lateMinutes > 0 && <Badge tone="warning">{r.lateMinutes} min late</Badge>}</p>}
           {data.requireLocation && <p className="mt-1 text-xs text-ink-400">Your location is checked when you clock in.</p>}
         </div>
@@ -48,6 +48,7 @@ export function MyAttendance() {
   const [corr, setCorr] = useState(null);
   const { data, isPending } = useQuery({ queryKey: ['my-att', range], queryFn: () => api.get(`/attendance/me?from=${range.from}&to=${range.to}`) });
   const request = useAction((b) => api.post('/attendance/corrections', b), { success: 'Correction requested', invalidate: [['my-att']], onDone: () => setCorr(null) });
+  const cancelCorr = useAction((id) => api.post(`/attendance/corrections/${id}/cancel`, {}), { success: 'Request cancelled', invalidate: [['my-att']] });
   const s = data?.summary;
   return (
     <>
@@ -64,10 +65,20 @@ export function MyAttendance() {
         { key: 'x', header: '', render: (r) => <Button size="sm" variant="ghost" onClick={() => setCorr({ workDate: r.workDate })}>Correct</Button> },
       ]} />
       {data?.corrections?.length > 0 && (
-        <Card className="mt-4"><CardHeader title="My correction requests" /><CardBody className="space-y-2 text-sm">{data.corrections.map((c) => <p key={c.id}>{dt(c.workDate)} · {c.reason} <StatusBadge value={c.status} /></p>)}</CardBody></Card>
+        <Card className="mt-4"><CardHeader title="My correction requests" description="Missed a clock-in or clock-out? Request a correction and your manager reviews it." />
+          <ul className="divide-y divide-line">{data.corrections.map((c) => (
+            <li key={c.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 text-sm">
+              <span className="w-28 font-medium text-ink-900">{dt(c.workDate)}</span>
+              <span className="tabular-nums text-ink-700">{c.clockIn ? `In ${timeOf(c.clockIn)}` : ''}{c.clockIn && c.clockOut ? ' · ' : ''}{c.clockOut ? `Out ${timeOf(c.clockOut)}` : ''}</span>
+              <span className="min-w-0 flex-1 truncate text-ink-500">{c.reason}{c.reviewNote ? ` · Reviewer: ${c.reviewNote}` : ''}</span>
+              <StatusBadge value={c.status} />
+              {c.status === 'PENDING' && <Button size="sm" variant="ghost" loading={cancelCorr.isPending} onClick={() => cancelCorr.mutate(c.id)}>Cancel</Button>}
+            </li>
+          ))}</ul>
+        </Card>
       )}
       <FormDialog open={!!corr} onClose={() => setCorr(null)} title="Request attendance correction" description="Your manager will review it." initial={{ workDate: corr?.workDate, inTime: '', outTime: '' }}
-        fields={[{ name: 'workDate', label: 'Date', type: 'date', required: true }, { name: 'inTime', label: 'Correct clock-in (HH:MM)' }, { name: 'outTime', label: 'Correct clock-out (HH:MM)' }, { name: 'reason', label: 'Reason', type: 'textarea', required: true }]}
+        fields={[{ name: 'workDate', label: 'Date', type: 'date', required: true }, { name: 'inTime', label: 'Correct clock-in', type: 'time', hint: 'Leave empty if it was right' }, { name: 'outTime', label: 'Correct clock-out', type: 'time', hint: 'Leave empty if it was right' }, { name: 'reason', label: 'What happened?', type: 'textarea', required: true, placeholder: 'e.g. Forgot to clock out after the client visit' }]}
         loading={request.isPending} error={request.error}
         onSubmit={({ workDate, inTime, outTime, reason }) => {
           const d = String(workDate).slice(0, 10);

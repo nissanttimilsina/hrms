@@ -3,13 +3,15 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppShell, ToastProvider, Skeleton, Button, SubscriptionBanner, BrandProvider } from '@hrms/shared-ui';
-import { LayoutDashboard, Users, Building2, Clock, CalendarDays, Wallet, Megaphone, ShieldCheck, CreditCard, LifeBuoy, Settings as Cog, Bell, UserRound, ScrollText, BarChart3, Fingerprint, ListTodo, FileText, ClipboardCheck, TrendingUp, FolderKanban, Gauge } from 'lucide-react';
+import { LayoutDashboard, Users, Building2, Clock, CalendarDays, Wallet, Megaphone, ShieldCheck, CreditCard, LifeBuoy, Settings as Cog, Bell, UserRound, ScrollText, BarChart3, Fingerprint, ListTodo, FileText, ClipboardCheck, TrendingUp, FolderKanban, Gauge, Receipt, FileSignature, Landmark } from 'lucide-react';
 import { AuthProvider, useAuth, api, dt } from './lib.jsx';
 import { Login, AcceptInvite, ForgotPassword, ResetPassword } from './pages/Auth.jsx';
 import { Dashboard } from './pages/Home.jsx';
 import { Employees, EmployeeProfile, Organization } from './pages/People.jsx';
 import { MyAttendance, AttendanceRegister, MyLeave, LeaveApprovals, LeaveSetup } from './pages/Time.jsx';
-import { PayrollRuns, PayrollRunDetail, PayrollSetup, MyPayslips } from './pages/Pay.jsx';
+import { PayrollRuns, PayrollRunDetail, PayrollSetup, MyPayslips, MyTax } from './pages/Pay.jsx';
+import { MyExpenses, ExpenseDetail, Expenses, ExpenseSettings } from './pages/Expenses.jsx';
+import { MyLetters, Letters, VerifyLetter } from './pages/Letters.jsx';
 import { Reports } from './pages/Reports.jsx';
 import { Devices } from './pages/Devices.jsx';
 import { Tasks, TaskDetail, DailyReport, WorkReports, WorkReportDetail, Performance, EmployeePerformance, Projects } from './pages/Work.jsx';
@@ -32,6 +34,9 @@ function buildNav(a) {
       f('attendance') && { key: '/me/attendance', label: 'My attendance', icon: I(Clock) },
       f('leave') && { key: '/me/leave', label: 'My leave', icon: I(CalendarDays) },
       f('payroll') && { key: '/me/payslips', label: 'My payslips', icon: I(Wallet) },
+      f('payroll') && can('payroll:view') && { key: '/me/tax', label: 'My tax', icon: I(Landmark) },
+      f('expenses') && can('expenses:create') && { key: '/me/expenses', label: 'My expenses', icon: I(Receipt) },
+      can('letters:create') && { key: '/me/letters', label: 'My letters', icon: I(FileSignature) },
     ] },
     f('tasks') && { label: 'Work', items: [
       (wide('tasks:view') || (!me && can('tasks:view'))) && { key: '/tasks', label: 'Tasks', icon: I(ListTodo) },
@@ -49,10 +54,12 @@ function buildNav(a) {
       can('leave:approve') && { key: '/leave/approvals', label: 'Leave approvals', icon: I(CalendarDays), locked: !f('leave') },
       can('leave:configure') && { key: '/leave/setup', label: 'Leave setup', icon: I(CalendarDays) },
       wide('payroll:view') && { key: '/payroll', label: 'Payroll', icon: I(Wallet), locked: !f('payroll') },
+      (wide('expenses:view') || wide('expenses:approve')) && { key: '/expenses', label: 'Expense claims', icon: I(Receipt), locked: !f('expenses') },
     ] },
     { label: 'Company', items: [
       can('reports:view') && { key: '/reports', label: 'Reports', icon: I(BarChart3) },
       can('announcements:view') && { key: '/announcements', label: 'Announcements', icon: I(Megaphone) },
+      can('letters:approve') && { key: '/letters', label: 'Letter requests', icon: I(FileSignature) },
       can('roles:view') && { key: '/access', label: 'Users & roles', icon: I(ShieldCheck) },
       can('subscription:view') && { key: '/billing', label: 'Subscription', icon: I(CreditCard) },
       can('support:view') && { key: '/support', label: 'Help & support', icon: I(LifeBuoy) },
@@ -102,6 +109,7 @@ function Shell() {
         <Route path="/accept-invite" element={<AcceptInvite />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/verify/:code" element={<VerifyLetter />} />
         <Route path="*" element={<Login />} />
       </Routes>
     );
@@ -142,6 +150,15 @@ function Shell() {
             <Route path="/me/attendance" element={<MyAttendance />} />
             <Route path="/me/leave" element={<MyLeave />} />
             <Route path="/me/payslips" element={<MyPayslips />} />
+            <Route path="/me/tax" element={<MyTax />} />
+            <Route path="/me/expenses" element={<MyExpenses />} />
+            <Route path="/me/expenses/:id" element={<ExpenseDetail />} />
+            <Route path="/me/letters" element={<MyLetters />} />
+            <Route path="/expenses" element={<Expenses />} />
+            <Route path="/expenses/settings" element={<ExpenseSettings />} />
+            <Route path="/expenses/:id" element={<ExpenseDetail />} />
+            <Route path="/letters" element={<Letters />} />
+            <Route path="/verify/:code" element={<VerifyLetter />} />
             <Route path="/employees" element={<Employees />} />
             <Route path="/employees/:id" element={<EmployeeProfile />} />
             <Route path="/organization" element={<Organization />} />

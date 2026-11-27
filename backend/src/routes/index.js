@@ -17,6 +17,8 @@ import { payrollRouter } from '../modules/payroll/payroll.routes.js';
 import { reportsRouter } from '../modules/reports/reports.routes.js';
 import { devicesRouter } from '../modules/devices/devices.routes.js';
 import { tasksRouter, projectsRouter, workReportsRouter, performanceRouter } from '../modules/work/work.routes.js';
+import { expensesRouter } from '../modules/expenses/expenses.routes.js';
+import { lettersRouter, letterVerifyRouter } from '../modules/letters/letters.routes.js';
 
 /**
  * /api/v1 route map.
@@ -37,6 +39,7 @@ export function apiRouter() {
 
   r.use(resolveHostTenant);
   r.use('/auth', tenantAuthRouter);
+  r.use('/verify', letterVerifyRouter); // public check of an issued HR letter, on the company's own address
 
   // Billing and support stay writable when the workspace is read-only, so customers can always pay and get help.
   const recovery = [authenticateTenant, subscriptionGuard({ allowWhenReadOnly: true })];
@@ -58,6 +61,8 @@ export function apiRouter() {
   tenant.use('/projects', projectsRouter);
   tenant.use('/work-reports', workReportsRouter);
   tenant.use('/performance', performanceRouter);
+  tenant.use('/expenses', expensesRouter);
+  tenant.use('/letters', lettersRouter);
   tenant.use('/', workspaceRouter); // /dashboard, /announcements, /notifications, /settings
   r.use(tenant);
 

@@ -100,6 +100,8 @@ export const RESOURCES = {
   tasks: { module: 'tasks', actions: ['view', 'create', 'edit', 'delete', 'export'] },
   work_reports: { module: 'tasks', actions: ['view', 'create', 'approve', 'export'] },
   projects: { module: 'tasks', actions: ['view', 'create', 'edit', 'delete'] },
+  // HR letters (employment, salary, experience…). approve = issue or reject; configure = letterhead.
+  letters: { module: 'ess', actions: ['view', 'create', 'approve', 'configure'] },
 };
 // Permissions that are not about records, so data scope does not apply.
 const UNSCOPED = new Set(['users', 'roles', 'settings', 'subscription', 'audit', 'workflows', 'support', 'holidays', 'announcements', 'projects']);
@@ -123,7 +125,7 @@ export const DEFAULT_ROLES = [
   { key: 'company_admin', name: 'Company Administrator', grants: every('COMPANY') },
   { key: 'hr_manager', name: 'HR Manager', grants: [
     ...r(['branches', 'departments', 'employees', 'documents', 'attendance', 'leave', 'shifts', 'recruitment',
-      'performance', 'training', 'assets', 'reports', 'holidays', 'announcements', 'devices', 'tasks', 'work_reports', 'projects'], '*', 'COMPANY'),
+      'performance', 'training', 'assets', 'reports', 'holidays', 'announcements', 'devices', 'tasks', 'work_reports', 'projects', 'letters'], '*', 'COMPANY'),
     ...r(['users', 'roles'], ['view'], 'COMPANY'),
     ...r(['support'], ['view', 'create'], 'COMPANY'),
   ] },
@@ -133,6 +135,7 @@ export const DEFAULT_ROLES = [
     ...r(['attendance', 'leave'], ['view', 'create', 'edit'], 'COMPANY'),
     ...r(['recruitment'], ['view', 'create', 'edit'], 'COMPANY'),
     ...r(['branches', 'departments'], ['view'], 'COMPANY'),
+    ...r(['letters'], ['view', 'approve'], 'COMPANY'),
   ] },
   { key: 'payroll_manager', name: 'Payroll Manager', grants: [
     ...r(['holidays', 'announcements'], ['view'], 'COMPANY'),
@@ -174,6 +177,7 @@ export const DEFAULT_ROLES = [
     ...r(['employees'], ['view'], 'DIRECT_REPORTS'),
     ...r(['attendance', 'leave'], ['view', 'approve', 'reject'], 'DIRECT_REPORTS'),
     ...r(['performance'], ['view', 'edit'], 'DIRECT_REPORTS'),
+    ...r(['expenses'], ['view', 'approve', 'reject'], 'DIRECT_REPORTS'),
     ...r(['tasks'], ['view', 'create', 'edit', 'delete'], 'DIRECT_REPORTS'),
     ...r(['work_reports'], ['view', 'approve'], 'DIRECT_REPORTS'),
     ...r(['projects'], ['view', 'create'], 'COMPANY'),
@@ -192,6 +196,7 @@ export const DEFAULT_ROLES = [
     ...r(['tasks'], ['view', 'create', 'edit'], 'OWN'),
     ...r(['work_reports'], ['view', 'create'], 'OWN'),
     ...r(['projects'], ['view'], 'COMPANY'),
+    ...r(['letters'], ['view', 'create'], 'OWN'),
   ] },
   { key: 'auditor', name: 'Auditor', grants: [
     ...r(Object.keys(RESOURCES), ['view', 'export'], 'COMPANY'),

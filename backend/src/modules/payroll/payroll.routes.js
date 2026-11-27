@@ -8,7 +8,7 @@ import { validate } from '../../middleware/common.js';
 import { recordInScope } from '../../services/rbac.service.js';
 import { scopedEmployeeIds } from '../../services/hr/attendance.js';
 import { audit, tenantActor } from '../../services/audit.service.js';
-import { bsMonthRange, fiscalYear, fiscalYearRange, BS_MONTHS } from '../../services/hr/calendar.js';
+import { bsMonthRange, fiscalYear, fiscalYearRange, BS_MONTHS, localDate } from '../../services/hr/calendar.js';
 import { getPolicy, rangeSummary } from '../../services/hr/attendance.js';
 import { calculateItem } from '../../services/hr/payroll-calc.js';
 import { notifyUsers, usersWithPermission } from '../../services/hr/notify.js';
@@ -280,6 +280,8 @@ payrollRouter.post('/runs/:id/approve', requirePermission('payroll:approve'), va
     for (const l of await app.EmployeeLoan.findAll({ where: { status: 'ACTIVE' }, transaction: t })) {
       if ((done.get(l.id) ?? 0) >= Number(l.principal) - 0.005) await l.update({ status: 'CLOSED', closedAt: new Date() }, { transaction: t });
     }
+    // Expense claims added to this month's salary are now paid.
+    await app.ExpenseClaim.update({ status: 'PAID', paidAt: new Date(), paymentRef: `Salary ${periodInfo(r.period).label}` }, { where: { status: 'SCHEDULED', payrollPeriod: r.period }, transaction: t });
     await audit({ transaction: t, tenantId: req.auth.tenantId, actor: tenantActor(req), action: 'payroll.approve', entityType: 'payroll_run', entityId: r.id, after: r.totals, req });
     return r;
   });
@@ -410,6 +412,113 @@ payrollRouter.get('/payslips/:itemId/pdf', requirePermission('payroll:view'), va
   doc.rect(50, y + 30, 495, 28).fill('#eff5ff');
   doc.fontSize(12).fillColor('#1d43ad').text(`Net pay: NPR ${npr(item.net)}`, 60, y + 38);
   doc.fontSize(8).fillColor('#94a3b8').text(`Employer SSF contribution: NPR ${npr(item.ssfEmployer)}. Annual tax projection: NPR ${npr(item.taxDetail.annualTax)} (FY ${item.run.fiscalYear}). Computer-generated payslip.`, 50, 760, { width: 495, align: 'center' });
+  doc.end();
+}));
+
+// --------------------------------------------------------------------------- tax statement (ESS + payroll staff)
+const FY = z.string().regex(/^\d{4}\/\d{2}$/, 'Use a fiscal year like 2083/84');
+const sumLines = (i, code) => r2(i.lines.filter((l) => l.code === code).reduce((n, l) => n + Number(l.amount), 0));
+
+/**
+ * One employee's salary and tax for a fiscal year, from approved payroll. Employees only see published
+ * months. The projection comes from the latest month's calculation, which spreads the remaining
+ * annual tax over the months left in the year.
+ */
+async function taxStatement(t, employeeId, fy, { publishedOnly }) {
+  const runWhere = { status: { [Op.in]: ['APPROVED', 'PAID'] }, ...(publishedOnly && { publishedAt: { [Op.ne]: null } }) };
+  const items = await app.PayrollItem.findAll({
+    where: { employeeId }, attributes: ['id', 'gross', 'deductions', 'net', 'tax', 'ssfEmployee', 'ssfEmployer', 'lines', 'taxDetail', 'snapshot'],
+    include: [{ model: app.PayrollRun, as: 'run', where: runWhere, attributes: ['period', 'fiscalYear'] }],
+    order: [[{ model: app.PayrollRun, as: 'run' }, 'period', 'ASC']], transaction: t,
+  });
+  const years = [...new Set(items.map((i) => i.run.fiscalYear))].sort().reverse();
+  const mine = items.filter((i) => i.run.fiscalYear === fy);
+  const months = mine.map((i) => ({
+    itemId: i.id, period: i.run.period, label: periodInfo(i.run.period).label, gross: Number(i.gross), ssf: Number(i.ssfEmployee), pf: sumLines(i, 'PF'), cit: sumLines(i, 'CIT'),
+    tds: Number(i.tax), net: Number(i.net), reimbursements: sumLines(i, 'REIMBURSEMENT'),
+  }));
+  const total = (k) => r2(months.reduce((n, m) => n + m[k], 0));
+  const last = mine.at(-1);
+  const d = last?.taxDetail;
+  const annualTax = d ? Number(d.annualTax) : null;
+  const paid = total('tds');
+  return {
+    fiscalYear: fy, years: years.includes(fy) ? years : [fy, ...years],
+    employee: last ? { name: last.snapshot.employee.name, code: last.snapshot.employee.code, pan: last.snapshot.employee.pan } : null,
+    months,
+    totals: { gross: total('gross'), ssf: total('ssf'), pf: total('pf'), cit: total('cit'), tds: paid, net: total('net'), reimbursements: total('reimbursements') },
+    projection: d ? {
+      asOf: periodInfo(last.run.period).label, annualTaxable: Number(d.annualTaxable), annualTax, paid, remaining: r2(Math.max(0, annualTax - paid)),
+      monthsRemaining: Math.max(0, Number(d.monthsRemaining) - 1), nextMonthEstimate: Number(d.monthTax), projectedIncome: Number(d.projectedAssessable),
+      retirementDeduction: Number(d.retirementDeduction), insuranceDeduction: Number(d.insuranceDeduction), femaleRebate: Number(d.femaleRebate ?? 0),
+      schedule: d.schedule, sstWaived: !!d.sstWaived, bands: d.bands,
+    } : null,
+  };
+}
+
+async function resolveStatementTarget(req, t, employeeId) {
+  if (!employeeId || employeeId === req.auth.principal.employeeId) {
+    if (!req.auth.principal.employeeId) throw BadRequest('Your account is not linked to an employee record. Ask HR to link it.');
+    return { employeeId: req.auth.principal.employeeId, publishedOnly: true };
+  }
+  if (req.scopes.every((s) => s.scope === 'OWN')) throw NotFound('Employee');
+  const emp = await app.Employee.findByPk(employeeId, { transaction: t });
+  if (!emp || !recordInScope(req.scopes, req.auth.principal, emp)) throw NotFound('Employee');
+  return { employeeId: emp.id, publishedOnly: false };
+}
+
+const stmtQuery = z.object({ fy: FY.optional(), employeeId: z.string().uuid().optional() }).strict();
+payrollRouter.get('/tax-statement', requirePermission('payroll:view'), validate({ query: stmtQuery }), asyncHandler(async (req, res) => {
+  const fy = req.query.fy ?? fiscalYear(localDate(new Date(), req.auth.ctx.tenant.timezone));
+  const out = await req.tx(async (t) => {
+    const target = await resolveStatementTarget(req, t, req.query.employeeId);
+    return taxStatement(t, target.employeeId, fy, target);
+  });
+  return ok(res, out);
+}));
+
+payrollRouter.get('/tax-statement/pdf', requirePermission('payroll:view'), validate({ query: stmtQuery }), asyncHandler(async (req, res) => {
+  const fy = req.query.fy ?? fiscalYear(localDate(new Date(), req.auth.ctx.tenant.timezone));
+  const s = await req.tx(async (t) => {
+    const target = await resolveStatementTarget(req, t, req.query.employeeId);
+    const st = await taxStatement(t, target.employeeId, fy, target);
+    await audit({ transaction: t, tenantId: req.auth.tenantId, actor: tenantActor(req), action: 'payroll.tax_statement', entityType: 'employee', entityId: target.employeeId, after: { fy }, req });
+    return st;
+  });
+  if (!s.months.length) throw NotFound(`Approved payroll for FY ${fy}`);
+  const tenant = req.auth.ctx.tenant.name;
+  const doc = new PDFDocument({ size: 'A4', margin: 50, info: { Title: `Salary and tax statement FY ${fy}` } });
+  res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': `attachment; filename="tax-statement-${fy.replace('/', '-')}-${s.employee.code}.pdf"`, 'Cache-Control': 'private, no-store' });
+  doc.pipe(res);
+  const money = (n) => Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  doc.fontSize(16).fillColor('#0f1729').text(tenant).fontSize(12).fillColor('#334155').text(`Salary and tax statement · FY ${fy}`);
+  doc.moveDown(0.5).fontSize(10).fillColor('#334155').text(`Employee: ${s.employee.name} (${s.employee.code})    PAN: ${s.employee.pan ?? 'not on record'}`);
+  doc.text(`Months included: ${s.months[0].label} to ${s.months.at(-1).label} (${s.months.length})`);
+  const cols = [['Month', 92, 'left'], ['Gross', 72], ['SSF', 58], ['PF', 52], ['CIT', 52], ['TDS', 62], ['Net pay', 77]];
+  let y = doc.y + 14;
+  const rowAt = (vals, bold, fill) => {
+    if (fill) doc.rect(50, y - 4, 495, 18).fill(fill);
+    let x = 50;
+    doc.font(bold ? 'Helvetica-Bold' : 'Helvetica').fontSize(9).fillColor('#0f1729');
+    vals.forEach((v, i) => { const [, w, align] = cols[i]; doc.text(v, x + 2, y, { width: w - 6, align: align ?? 'right' }); x += w + 4; });
+    y += 18;
+  };
+  rowAt(cols.map((c) => c[0]), true, '#eff5ff');
+  s.months.forEach((m) => rowAt([m.label, money(m.gross), money(m.ssf), money(m.pf), money(m.cit), money(m.tds), money(m.net)]));
+  doc.moveTo(50, y - 3).lineTo(545, y - 3).strokeColor('#cbd5e1').stroke();
+  const tt = s.totals;
+  rowAt(['Total', money(tt.gross), money(tt.ssf), money(tt.pf), money(tt.cit), money(tt.tds), money(tt.net)], true);
+  y += 10;
+  doc.font('Helvetica').fontSize(10).fillColor('#0f1729');
+  const p = s.projection;
+  const lines = [
+    `Income tax (TDS) deducted so far: NPR ${money(tt.tds)}`,
+    p && `Estimated tax for the full year (as of ${p.asOf}): NPR ${money(p.annualTax)}, on estimated taxable income of NPR ${money(p.annualTaxable)}`,
+    p && `Estimated tax still to be deducted: NPR ${money(p.remaining)}`,
+    tt.reimbursements > 0 && `Gross pay includes non-taxable expense reimbursements of NPR ${money(tt.reimbursements)}`,
+  ].filter(Boolean);
+  lines.forEach((l) => { doc.text(l, 50, y, { width: 495 }); y = doc.y + 4; });
+  doc.fontSize(8).fillColor('#64748b').text('Prepared from approved payroll records. Estimates change if pay, deductions or tax rules change during the year. This statement is not a tax clearance certificate; tax deposited is confirmed by your employer\'s TDS filings with the Inland Revenue Department.', 50, 740, { width: 495, align: 'center' });
   doc.end();
 }));
 

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Button, Card, CardBody, CardHeader, DataTable, Skeleton, Stat, Badge, EmptyState, Dialog, Select } from '@hrms/shared-ui';
+import { Button, Card, CardBody, CardHeader, DataTable, Skeleton, Stat, Badge, EmptyState, Dialog, Select, useToast } from '@hrms/shared-ui';
 import { api, useAuth, useAction, FormDialog, PageHeader, StatusBadge, npr, dt, fullName } from '../lib.jsx';
 
 const BS_MONTHS = ['Baisakh', 'Jestha', 'Asar', 'Shrawan', 'Bhadra', 'Asoj', 'Kartik', 'Mangsir', 'Poush', 'Magh', 'Falgun', 'Chaitra'];
@@ -189,7 +189,7 @@ export function MyPayslips() {
   const { data: loans } = useQuery({ queryKey: ['my-loans'], queryFn: () => api.get('/payroll/loans/me') });
   return (
     <>
-      <PageHeader title="My payslips" />
+      <PageHeader title="My payslips" actions={<Link to="/me/tax"><Button variant="secondary">My tax this year</Button></Link>} />
       {(loans ?? []).filter((l) => l.status === 'ACTIVE').map((l) => <Card key={l.id} className="mb-3"><CardBody className="text-sm"><strong>{l.title}</strong>: {npr(l.balance)} still to repay at {npr(l.installmentAmount)} per month.</CardBody></Card>)}
       {isPending ? <Skeleton className="h-40" /> : !data.length ? <EmptyState title="No payslips yet" description="Payslips appear here once payroll is approved and published." /> : (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -201,6 +201,70 @@ export function MyPayslips() {
               <Button size="sm" variant="secondary" className="mt-3" onClick={() => api.download(`/payroll/payslips/${p.id}/pdf`, `payslip-${p.run.period}.pdf`)}>Download PDF</Button>
             </CardBody></Card>
           ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+// =========================================================================== ESS: my tax
+export function MyTax() {
+  const toast = useToast();
+  const [fy, setFy] = useState('');
+  const { data: s, isPending } = useQuery({ queryKey: ['tax-statement', fy], queryFn: () => api.get(`/payroll/tax-statement${fy ? `?fy=${encodeURIComponent(fy)}` : ''}`) });
+  const download = async () => {
+    try { await api.download(`/payroll/tax-statement/pdf?fy=${encodeURIComponent(s.fiscalYear)}`, `tax-statement-${s.fiscalYear.replace('/', '-')}.pdf`); } catch (e) { toast.error('Could not download the statement', e.message); }
+  };
+  if (isPending) return <Skeleton className="h-96" />;
+  const p = s.projection;
+  const t = s.totals;
+  const pct = p && p.annualTax > 0 ? Math.min(100, Math.round((t.tds / p.annualTax) * 100)) : 0;
+  return (
+    <>
+      <PageHeader title="My tax" description={`Income tax deducted from your salary, fiscal year ${s.fiscalYear}`}
+        actions={<>
+          {s.years.length > 1 && <div className="w-36"><Select aria-label="Fiscal year" value={s.fiscalYear} onChange={(e) => setFy(e.target.value)} options={s.years.map((y) => ({ value: y, label: `FY ${y}` }))} /></div>}
+          <Button variant="secondary" disabled={!s.months.length} onClick={download}>Download statement</Button>
+        </>} />
+      {!s.months.length ? (
+        <Card><EmptyState title={`No payslips for FY ${s.fiscalYear} yet`} description="Your tax summary appears here once your first payslip of the year is published." /></Card>
+      ) : (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <Stat label="Tax paid so far" value={npr(t.tds)} hint={`${s.months.length} month(s)`} />
+            <Stat label="Estimated for the year" value={p ? npr(p.annualTax) : '—'} hint={p ? `As of ${p.asOf}` : undefined} />
+            <Stat label="Still to be deducted" value={p ? npr(p.remaining) : '—'} hint={p && p.monthsRemaining ? `Over ${p.monthsRemaining} more month(s)` : undefined} />
+            <Stat label="Next month (estimate)" value={p ? npr(p.nextMonthEstimate) : '—'} hint="Changes if your pay changes" />
+          </div>
+          {p && p.annualTax > 0 && (
+            <Card><CardBody>
+              <div className="flex justify-between text-sm"><span className="text-ink-700">Paid {pct}% of this year's estimated tax</span><span className="tabular-nums text-ink-500">{npr(t.tds)} of {npr(p.annualTax)}</span></div>
+              <div className="mt-2 h-2 rounded-full bg-subtle"><div className="h-full rounded-full bg-brand-600" style={{ width: `${pct}%` }} /></div>
+            </CardBody></Card>
+          )}
+          <DataTable rows={s.months} rowKey="period" columns={[
+            { key: 'label', header: 'Month', render: (m) => <span className="font-medium text-ink-900">{m.label}</span> },
+            { key: 'gross', header: 'Gross', align: 'right', render: (m) => npr(m.gross) },
+            { key: 'ssf', header: 'SSF', align: 'right', render: (m) => npr(m.ssf) },
+            { key: 'pf', header: 'PF + CIT', align: 'right', render: (m) => npr(m.pf + m.cit) },
+            { key: 'tds', header: 'Tax (TDS)', align: 'right', render: (m) => <strong>{npr(m.tds)}</strong> },
+            { key: 'net', header: 'Net pay', align: 'right', render: (m) => npr(m.net) },
+          ]} />
+          {p && (
+            <Card>
+              <CardHeader title="How your yearly tax is estimated" description={`Based on your ${p.asOf} payslip. It assumes the same pay for the rest of the year.`} />
+              <CardBody className="space-y-1.5 text-sm text-ink-700">
+                <p className="flex justify-between gap-3"><span>Estimated income for the year (incl. employer contributions)</span><span className="tabular-nums">{npr(p.projectedIncome)}</span></p>
+                <p className="flex justify-between gap-3"><span>Less retirement savings (SSF, PF, CIT, within the legal cap)</span><span className="tabular-nums">−{npr(p.retirementDeduction)}</span></p>
+                {p.insuranceDeduction > 0 && <p className="flex justify-between gap-3"><span>Less insurance premiums</span><span className="tabular-nums">−{npr(p.insuranceDeduction)}</span></p>}
+                <p className="flex justify-between gap-3 border-t border-line pt-1.5 font-medium text-ink-900"><span>Taxable income</span><span className="tabular-nums">{npr(p.annualTaxable)}</span></p>
+                {p.bands.map((b, i) => <p key={i} className="flex justify-between gap-3 pl-3 text-ink-500"><span>{npr(b.taxable)} at {b.rate}%{b.sst ? (p.sstWaived ? ' (social security tax, waived for SSF members)' : ' (social security tax)') : ''}</span><span className="tabular-nums">{npr(b.tax)}</span></p>)}
+                {p.femaleRebate > 0 && <p className="flex justify-between gap-3"><span>Less 10% rebate for women</span><span className="tabular-nums">−{npr(p.femaleRebate)}</span></p>}
+                <p className="flex justify-between gap-3 border-t border-line pt-1.5 font-semibold text-ink-900"><span>Estimated tax for the year</span><span className="tabular-nums">{npr(p.annualTax)}</span></p>
+                <p className="pt-2 text-xs text-ink-500">To lower your tax legally, ask HR about CIT contributions or recording your life and health insurance premiums. Tax rules come from the Finance Act and are checked each year.</p>
+              </CardBody>
+            </Card>
+          )}
         </div>
       )}
     </>

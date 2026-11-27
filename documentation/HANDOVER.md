@@ -75,7 +75,9 @@ The deploy builds the images, runs `migrate` (SQL migrations, then `seeds/run.js
 - **Email works.** It is sent through Brevo SMTP from `no-reply@lishnutech.com`; the domain is authenticated with DKIM and DMARC. Brevo's "Authorized IPs" list includes `163.61.41.51`. To test: `docker compose exec api node src/scripts/send-test-email.js you@example.com`, run in `/opt/hrms/infrastructure/docker`.
 - **Super Admin password reset:** `docker compose exec api node src/scripts/reset-platform-password.js <email>`, optionally with `NEW_PASSWORD=...` set.
 
-**Last thing delivered:** the work-management module (§12). He was given deploy steps and setup advice: set each employee's Reporting manager, and give managers the Team Leader or Department Manager role. No reply on that yet.
+**Stage 1 of employee self-service (§12a)** is on branch `stage-1-self-service`, not yet in `main`. The session that wrote it could not install npm packages, so the backend tests and the frontend build were not run before the push; the migration was applied to a real PostgreSQL 16 and every file passed a syntax and undefined-name check. The next session must run `npm test` and `npm run build`, check the new pages in a browser, fix anything that fails, then merge into `main` and give the owner deploy commands.
+
+**Previously delivered:** the work-management module (§12). He was given deploy steps and setup advice: set each employee's Reporting manager, and give managers the Team Leader or Department Manager role. No reply on that yet.
 
 ## 4. Requirements that drive the product
 
@@ -190,6 +192,7 @@ documentation/  HANDOVER.md (this), PROGRESS.md (release status), architecture/o
   - 010 calendars, rules and loans: `branches.default_shift_id`, `shifts.day_hours`, `holidays.kind` (HOLIDAY|WORKING_DAY), `employee_loans`, `payroll_adjustments.code`.
   - 011 honest plan highlights.
   - 012 work management: `projects`, `tasks`, `task_activity`, `work_reports`, `work_report_items`, plus the core feature `tasks`.
+  - 013 self-service: `expense_claims`, `letter_requests`; `files.owner_type` gains `EXPENSE_RECEIPT`.
 - **Design rules:**
   - Composite tenant foreign keys: `(tenant_id, id)`.
   - Append-only history, ledger, audit and salary tables.
@@ -393,6 +396,42 @@ Prices are in NPR plus 13% VAT, billed monthly or annually.
   - Then "Today at work", with company stats shown only to people who can see everyone.
 - **Marketing:** the `task-management` feature page and a Tasks tab in the home tour.
 
+## 12a. Employee self-service, stage 1 (branch `stage-1-self-service`)
+
+Asked for by the owner: "something professional, long term, more than other systems" for employees. Missed-punch requests already existed (My attendance → Request correction); stage 1 improved them rather than rebuilding them.
+
+**Performance-score fixes** (`services/work.service.js`):
+- Punctuality counts a day as late when `late_minutes > 0`, even if the day ended as a half day. Before, clocking in late and out early turned LATE into HALF_DAY and the lateness disappeared (owner's screenshot: 438 minutes late, punctuality 100%).
+- Report rate no longer counts today until today's report is in. A new employee no longer starts with a red score of 38.
+
+**Expense claims** (feature `expenses`, Professional plan and above; `modules/expenses/expenses.routes.js`, `services/uploads.js`):
+- Flow: SUBMITTED → MANAGER_APPROVED → APPROVED → SCHEDULED (added to a payroll month) → PAID, or APPROVED → PAID directly with a reference. REJECTED and CANCELLED are final.
+- "Finance" = `expenses:approve` at COMPANY scope (owner, admin, payroll manager, accountant). Finance can approve at either stage and may approve less than claimed, with a note. A manager can approve only the first stage and cannot change the amount. Nobody approves or pays their own claim.
+- The manager step is needed only if the employee's manager has a login holding `expenses:approve`; otherwise the claim goes straight to finance. Team leaders now get expenses view/approve/reject for DIRECT_REPORTS in the role template. **This only applies to new companies**: the seed backfills new permissions, not new grants of existing ones, so existing companies' Team Leader roles need it added under Users & roles if wanted.
+- Paying with salary creates a non-taxable `REIMBURSEMENT` payroll adjustment for the chosen BS month (needs `payroll:edit` and the payroll feature); approving that month's payroll marks the claims PAID. It can be taken back while that payroll is not submitted.
+- Policy in tenant setting `expenses.policy`: categories (code, name, per-claim limit, active), `receiptRequiredAbove` (default NPR 500), `maxAgeDays` (default 60). Claims above a limit are flagged, not blocked. Same employee + date + amount + category is refused as a duplicate.
+- Receipts: JPEG, PNG or PDF, checked by their first bytes, stored privately as `files` with owner type `EXPENSE_RECEIPT`.
+- API: `GET /expenses?view=mine|team|queue`, `GET /expenses/summary`, `GET/PUT /expenses/policy`, `GET /expenses/export` (CSV), `POST /expenses` (multipart, field `receipt`), `GET /expenses/:id`, `GET /expenses/:id/receipt`, `POST /expenses/:id/approve|reject|cancel|pay|unschedule`.
+- UI: My expenses (`/me/expenses`, `/me/expenses/:id`), Expense claims (`/expenses`, tabs "Needs your action" and "All claims"), Categories and rules (`/expenses/settings`), a dashboard card and "Waiting for you" tiles.
+
+**HR letters** (core, under `ess`; new permission resource `letters` with view, create, approve, configure; `modules/letters/letters.routes.js`, `services/letters.js`):
+- Types: employment verification, salary certificate, experience letter, letter to a bank (needs the bank), no objection letter.
+- Employee requests → HR (`letters:approve`: owner, admin, HR manager, HR officer) issues or rejects. Issuing freezes the data into `letter_requests.content`, so re-downloading always gives the same letter. Salary and bank letters need a salary on record.
+- PDF on the letterhead (tenant setting `letters.letterhead`: registered name, address, contacts, PAN, default signatory, reference prefix), with reference `LTR/<BS year>/<number>`, AD and BS dates, a signature and stamp block, and a footer with a verification code.
+- Anyone can check a letter at `https://<slug>.<domain>/verify/<code>` (API `GET /api/v1/verify/letters/:code`, public, on the company's own host only). It shows type, reference, name, role and date, never pay. HR can withdraw a letter; it then shows as withdrawn and the employee can no longer download it.
+- No logo yet: `branding.logoFileId` exists but nothing uploads a logo. The letterhead uses the brand colour.
+- UI: My letters (`/me/letters`), Letter requests (`/letters`) with the Letterhead dialog, public page `/verify/:code`.
+
+**My tax** (payroll feature; `GET /payroll/tax-statement?fy=&employeeId=`, `GET /payroll/tax-statement/pdf`):
+- From approved payroll; employees see published months only. Shows tax paid so far, the full-year estimate from the latest payslip's calculation, what is still to be deducted, next month's estimate, a month-by-month table and how the estimate is worked out. PDF "salary and tax statement", clearly labelled as not a tax clearance certificate.
+- UI: `/me/tax`, linked from My payslips.
+
+**Missed-punch requests:** the employee can cancel a pending request (`POST /attendance/corrections/:id/cancel`); with no manager login, everyone who approves attendance company-wide is notified (by email too); time pickers in the form; the list shows the requested times and the reviewer's note.
+
+**Website:** Expense Management is now `available`; the Employee Self-Service page lists the new capabilities.
+
+**Tests:** `tests/self-service.test.js` (14 tests) covers the score fixes, the whole expense flow including payroll, letters including public verification and withdrawal, the tax statement, and correction cancel. Not yet run (see §3).
+
 ## 13. Integrations
 
 - **Email:**
@@ -531,6 +570,11 @@ These notes describe the cloud workspace earlier sessions used. A new session ma
 - One small live eSewa and one live Khalti payment.
 - Legal pages are drafts that need review by Nepali counsel.
 - Tax slabs and SSF rates must be checked every Shrawan.
+
+**Stage 1 follow-ups:**
+- Run the tests and build for `stage-1-self-service`, check the pages at desktop size and 390 px, merge into `main`, then deploy.
+- After deploy, the owner should fill in the letterhead (Letter requests → Letterhead) and review expense categories and limits (Expense claims → Categories and rules).
+- Existing companies' Team Leader roles do not get expense approval automatically (see §12a).
 
 **Production follow-ups for the owner:**
 - Deploy `2e2bee8`.

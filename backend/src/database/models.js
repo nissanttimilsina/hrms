@@ -328,6 +328,22 @@ export function defineModels(sequelize) {
   WorkReport.hasMany(WorkReportItem, { foreignKey: 'reportId', as: 'items' });
   WorkReportItem.belongsTo(Task, { foreignKey: 'taskId', as: 'task' });
 
+  // ---------------------------------------------------------------- self-service (013)
+  const ExpenseClaim = sequelize.define('ExpenseClaim', {
+    id, tenantId, number: I, employeeId: U, category: S, title: S, expenseDate: DataTypes.DATEONLY, amount: M, merchant: S, description: T,
+    receiptFileId: U, status: S, managerUserId: U, managerDecidedBy: U, managerDecidedAt: D, managerNote: T,
+    approvedBy: U, approvedAt: D, approvedAmount: M, financeNote: T, rejectedBy: U, rejectedAt: D, rejectReason: T,
+    payoutMethod: S, payrollPeriod: S, payrollAdjustmentId: U, paidAt: D, paymentRef: S, createdBy: U,
+  }, opts('expense_claims'));
+  const LetterRequest = sequelize.define('LetterRequest', {
+    id, tenantId, number: I, employeeId: U, type: S, purpose: T, addressedTo: T, details: T, status: S, requestedBy: U,
+    decidedBy: U, decidedAt: D, decisionNote: T, reference: S, verifyCode: S, content: J, issuedAt: D, revokedAt: D, revokeReason: T,
+  }, opts('letter_requests'));
+  ExpenseClaim.belongsTo(Employee, { foreignKey: 'employeeId', as: 'employee' });
+  ExpenseClaim.belongsTo(File, { foreignKey: 'receiptFileId', as: 'receipt' });
+  LetterRequest.belongsTo(Employee, { foreignKey: 'employeeId', as: 'employee' });
+  LetterRequest.belongsTo(User, { foreignKey: 'decidedBy', as: 'decider' });
+
   PlanEntitlement.belongsTo(FeatureCatalog, { foreignKey: 'featureId', as: 'feature' });
   Subscription.belongsTo(Plan, { foreignKey: 'planId', as: 'plan' });
   Subscription.hasMany(SubscriptionItem, { foreignKey: 'subscriptionId', as: 'items' });
@@ -346,7 +362,7 @@ export function defineModels(sequelize) {
   SupportTicket.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
 
   return {
-    Project, Task, TaskActivity, WorkReport, WorkReportItem,
+    Project, Task, TaskActivity, WorkReport, WorkReportItem, ExpenseClaim, LetterRequest,
     SubscriptionRequest, TenantFeatureOverride, EmployeeLoan, AttendanceDevice, DevicePunch, DeviceLog,
     TaxRuleSet, SalaryComponent, EmployeeSalary, PayrollRun, PayrollItem, PayrollAdjustment,
     Designation, Shift, EmployeeHistory, File, AttendanceRecord, AttendanceCorrection, Holiday, LeaveType, LeaveTransaction,

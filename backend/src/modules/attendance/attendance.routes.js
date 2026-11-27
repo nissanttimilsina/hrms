@@ -8,7 +8,7 @@ import { recordInScope } from '../../services/rbac.service.js';
 import { audit, tenantActor } from '../../services/audit.service.js';
 import { localDate } from '../../services/hr/calendar.js';
 import { getPolicy, scheduleFor, compute, haversineM, scopedEmployeeIds, dailyRegister, rangeSummary, DEFAULT_POLICY } from '../../services/hr/attendance.js';
-import { notifyUsers, userIdForEmployee } from '../../services/hr/notify.js';
+import { notifyUsers, userIdForEmployee, usersWithPermission } from '../../services/hr/notify.js';
 import { asyncHandler, ok, created } from '../../utils/http.js';
 import { BadRequest, Conflict, Forbidden, NotFound } from '../../utils/errors.js';
 
@@ -158,7 +158,10 @@ attendanceRouter.post('/corrections', requirePermission('attendance:create'), va
     if (await app.AttendanceCorrection.count({ where: { employeeId, workDate: req.body.workDate, status: 'PENDING' }, transaction: t })) throw Conflict('A correction for this date is already pending');
     const row = await app.AttendanceCorrection.create({ tenantId: req.auth.tenantId, employeeId, ...req.body, requestedBy: req.auth.userId }, { transaction: t });
     const emp = await app.Employee.findByPk(employeeId, { transaction: t });
-    await notifyUsers(t, [await userIdForEmployee(t, emp.managerId)], { type: 'attendance.correction', title: 'Attendance correction to review', body: `${emp.firstName} ${emp.lastName} · ${req.body.workDate}`, link: '/attendance/corrections' });
+    // The manager reviews it; with no manager login, everyone who approves attendance company-wide is told.
+    const manager = await userIdForEmployee(t, emp.managerId);
+    const reviewers = manager && manager !== req.auth.userId ? [manager] : (await usersWithPermission(t, 'attendance:approve')).filter((u) => u !== req.auth.userId);
+    await notifyUsers(t, reviewers, { type: 'attendance.correction', title: 'Attendance correction to review', body: `${emp.firstName} ${emp.lastName} · ${req.body.workDate} · ${req.body.reason}`, link: '/attendance/corrections', email: true });
     return row;
   });
   return created(res, c);
@@ -175,6 +178,19 @@ attendanceRouter.get('/corrections', requirePermission('attendance:view'), valid
     });
     return ok(res, rows);
   }));
+
+attendanceRouter.post('/corrections/:id/cancel', requirePermission('attendance:create'), validate(idParam), asyncHandler(async (req, res) => {
+  const employeeId = myEmployeeId(req);
+  const c = await req.tx(async (t) => {
+    const row = await app.AttendanceCorrection.findOne({ where: { id: req.params.id, employeeId }, transaction: t, lock: t.LOCK.UPDATE });
+    if (!row) throw NotFound('Correction');
+    if (row.status !== 'PENDING') throw Conflict(`Correction is already ${row.status.toLowerCase()}`);
+    await row.update({ status: 'CANCELLED' }, { transaction: t });
+    await audit({ transaction: t, tenantId: req.auth.tenantId, actor: tenantActor(req), action: 'attendance.correction_cancel', entityType: 'attendance_correction', entityId: row.id, req });
+    return row;
+  });
+  return ok(res, c);
+}));
 
 const decide = (approve) => asyncHandler(async (req, res) => {
   const tz = req.auth.ctx.tenant.timezone;

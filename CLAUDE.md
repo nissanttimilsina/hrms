@@ -33,4 +33,4 @@ Multi-tenant HR and payroll SaaS for Nepal, built for Lishnu Tech Pvt. Ltd. Live
 - **PATCH schemas:** never derive them with `.partial()` from a schema that has `.default()` values.
 
 ## Where things stand
-Latest work: work management (tasks, daily work reports, manager review and rating, performance, role-aware dashboard), in commit `2e2bee8`. The owner may not have deployed it yet. Open items and suggested next steps: HANDOVER §18–19.
+Latest work: employee self-service stage 1 (expense claims, HR letters with verification, My tax, missed-punch improvements, performance-score fixes), on branch `stage-1-self-service`. It was written in a workspace that could not install packages, so its tests and build had not been run when it was pushed: run them, check the pages in a browser, then merge into `main`. Details: HANDOVER §12a. Before that: work management, `2e2bee8`. Open items and suggested next steps: HANDOVER §18–19.

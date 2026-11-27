@@ -1,11 +1,13 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
-import { AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, FileText, ListTodo, MessageSquareQuote, Plus, Send, Users } from 'lucide-react';
+import { AlertTriangle, CalendarDays, CheckCircle2, ChevronRight, ClipboardList, FileSignature, FileText, ListTodo, MessageSquareQuote, Plus, Receipt, Send, Users, Wallet } from 'lucide-react';
 import { Card, CardBody, CardHeader, Skeleton, EmptyState, Badge, Button, cn } from '@hrms/shared-ui';
 import { api, useAuth, PageHeader, dt, todayKtm, addDays } from '../lib.jsx';
 import { ClockWidget } from './Time.jsx';
 import { StatusPill, PriorityFlag, ProgressBar, DueLabel, Stars, ScoreRing } from './Work.jsx';
+import { ExpensesCard } from './Expenses.jsx';
+import { usePendingLetters } from './Letters.jsx';
 
 const Tile = ({ label, value, hint, to, tone, icon: Icon }) => {
   const body = (
@@ -122,6 +124,27 @@ function LeaveCard() {
   );
 }
 
+/** Requests from employees that wait for this person: expense claims and letters. Hidden when there is nothing to show. */
+function WaitingForYou() {
+  const a = useAuth();
+  const canExpenses = a.feature('expenses') && a.can('expenses:approve');
+  const canLetters = a.can('letters:approve');
+  const { data: ex } = useQuery({ queryKey: ['expense-summary'], queryFn: () => api.get('/expenses/summary'), enabled: canExpenses, retry: false });
+  const { data: letters } = usePendingLetters(canLetters);
+  const tiles = [
+    canExpenses && ex?.queue > 0 && <Tile key="ex" label="Expense claims to approve" value={ex.queue} to="/expenses" icon={Receipt} tone="warning" />,
+    canExpenses && ex?.toPay > 0 && <Tile key="pay" label="Approved claims to pay" value={ex.toPay} to="/expenses" icon={Wallet} tone="warning" />,
+    canLetters && letters?.length > 0 && <Tile key="lt" label="Letters to issue" value={letters.length} to="/letters" icon={FileSignature} tone="warning" />,
+  ].filter(Boolean);
+  if (!tiles.length) return null;
+  return (
+    <section>
+      <SectionTitle>Waiting for you</SectionTitle>
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">{tiles}</div>
+    </section>
+  );
+}
+
 function TeamSection({ canReview }) {
   const nav = useNavigate();
   const { data: sum } = useQuery({ queryKey: ['tasks-summary', 'team'], queryFn: () => api.get('/tasks/summary?view=team') });
@@ -216,12 +239,15 @@ export function Dashboard() {
                 <div className="flex flex-col gap-4">
                   <MyPerformance employeeId={me} />
                   {a.feature('leave') && a.can('leave:view') && <LeaveCard />}
+                  {a.feature('expenses') && a.can('expenses:create') && <ExpensesCard />}
                 </div>
               </div>
             )}
             {!tasksOn && a.feature('leave') && a.can('leave:view') && <div className="grid grid-cols-1 [&>*]:min-w-0 gap-4 lg:grid-cols-3"><LeaveCard /></div>}
           </section>
         )}
+
+        <WaitingForYou />
 
         {isManager && <TeamSection canReview={canReview} />}
 
