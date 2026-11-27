@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Badge, Button, Checkbox, Field, Input, Select, Skeleton, Textarea, cn } from '@hrms/shared-ui';
-import { api, formatPrice, getUtm } from '../lib/site.js';
+import { api, formatPrice, getUtm, SITE } from '../lib/site.js';
 import { Icon, ButtonLink, Check, Markdown } from './core.jsx';
 import { FEATURES } from '../content/features.js';
 import { INDUSTRIES } from '../content/industries.js';
@@ -18,7 +18,7 @@ export function DashboardPreview() {
     <div className="relative rounded-xl border border-line bg-white p-2 shadow-pop" aria-label="Illustration of the HR dashboard" role="img">
       <div className="flex items-center gap-1.5 border-b border-line px-3 py-2">
         {['#f87171', '#fbbf24', '#34d399'].map((c) => <span key={c} className="size-2.5 rounded-full" style={{ background: c }} />)}
-        <span className="ml-3 rounded bg-subtle px-2 py-0.5 text-[11px] text-ink-500">yourcompany.yourhrms.com</span>
+        <span className="ml-3 rounded bg-subtle px-2 py-0.5 text-[11px] text-ink-500">yourcompany.{SITE.rootDomain}</span>
       </div>
       <div className="grid grid-cols-[120px_1fr] gap-0 text-left">
         <div className="hidden space-y-1 border-r border-line p-3 sm:block">
@@ -77,8 +77,8 @@ export function PlanCards({ plans, cycle, compact }) {
         const price = cycle === 'ANNUAL' ? p.prices.annual : p.prices.monthly;
         const isPopular = p.code === popular;
         return (
-          <div key={p.code} className={cn('relative flex flex-col rounded-xl border bg-white p-6', isPopular ? 'border-brand-500 shadow-pop ring-1 ring-brand-500' : 'border-line shadow-card')}>
-            {isPopular && <span className="absolute -top-3 left-6 rounded-full bg-brand-600 px-3 py-0.5 text-xs font-semibold text-white">Most popular</span>}
+          <div key={p.code} className={cn('relative flex flex-col rounded-2xl border p-6', isPopular ? 'border-night bg-night text-white shadow-[0_30px_70px_-35px_rgba(11,26,63,.8)] [&_.text-ink-900]:text-white [&_.text-ink-500]:text-white/65 [&_.text-ink-400]:text-white/50 [&_.text-ink-700]:text-white/85 [&_svg.text-success-600]:text-marigold' : 'border-line bg-white')}>
+            {isPopular && <span className="absolute right-5 top-5 rounded-full bg-marigold px-2.5 py-0.5 text-xs font-semibold text-night">Most chosen</span>}
             <h3 className="text-lg font-semibold">{p.name}</h3>
             <p className="mt-1 min-h-10 text-sm text-ink-500">{p.limits.employees ? `Up to ${p.limits.employees} employees · ${p.limits.branches} branch${p.limits.branches > 1 ? 'es' : ''}` : 'For larger and complex organisations'}</p>
             <div className="mt-4 min-h-16">
@@ -92,7 +92,7 @@ export function PlanCards({ plans, cycle, compact }) {
                 </>
               )}
             </div>
-            <ButtonLink to={p.contactSales ? '/contact?type=enterprise' : `/signup?plan=${p.code}&cycle=${cycle}`} variant={isPopular ? 'primary' : 'secondary'} size="md" className="mt-5 w-full">
+            <ButtonLink to={p.contactSales ? '/contact?type=enterprise' : `/signup?plan=${p.code}&cycle=${cycle}`} variant={isPopular ? 'inverse' : 'secondary'} size="md" className="mt-5 w-full">
               {p.contactSales ? 'Talk to sales' : `Start ${p.trialDays}-day free trial`}
             </ButtonLink>
             <ul className="mt-6 space-y-2.5 text-sm">{(p.highlights ?? []).map((h) => <Check key={h}>{h}</Check>)}</ul>
@@ -104,7 +104,7 @@ export function PlanCards({ plans, cycle, compact }) {
 }
 
 export function PlanCardsSkeleton() {
-  return <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-96 rounded-xl" />)}</div>;
+  return <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">{[0, 1, 2, 3].map((i) => <div key={i} className="h-[27rem] rounded-2xl border border-line bg-white p-6"><Skeleton className="h-5 w-24" /><Skeleton className="mt-3 h-4 w-40" /><Skeleton className="mt-6 h-8 w-32" /><Skeleton className="mt-6 h-10 w-full" /><div className="mt-6 space-y-3">{[0, 1, 2, 3, 4].map((j) => <Skeleton key={j} className="h-3.5 w-full" />)}</div></div>)}</div>;
 }
 
 /** Feature-by-plan comparison built from the live catalogue. */
@@ -294,9 +294,9 @@ export function FaqList({ category, limit }) {
   const items = (data ?? []).filter((f) => !category || f.data?.category === category).slice(0, limit);
   if (isPending) return <div className="space-y-3">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-14" />)}</div>;
   return (
-    <div className="divide-y divide-line rounded-xl border border-line bg-white">
+    <div className="divide-y divide-line border-y border-line">
       {items.map((f) => (
-        <details key={f.slug} className="group p-5">
+        <details key={f.slug} className="group py-5">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4 font-medium text-ink-900">
             {f.title}<Icon name="Plus" className="size-4 shrink-0 text-ink-400 transition group-open:rotate-45" />
           </summary>

@@ -14,3 +14,28 @@
   .prose-hrms code { background: var(--color-subtle); padding: .1rem .3rem; border-radius: 4px; font-size: .9em; }
   .prose-hrms blockquote { border-left: 3px solid var(--color-line-strong); padding-left: 1rem; color: var(--color-ink-500); }
 }
+
+/* ------------------------------------------------------------------ marketing identity */
+@theme {
+  --color-night: #0b1a3f;      /* deep navy bands */
+  --color-night-2: #12275a;
+  --color-marigold: #f0a43a;   /* small highlights only: late marks, the BS date */
+}
+
+/* Hero scene: one orchestrated entrance, CSS only (plays on the prerendered page, no JS needed). */
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes pop { from { opacity: 0; transform: scale(.6); } to { opacity: 1; transform: none; } }
+@keyframes draw { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes pulse-dot { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+@layer components {
+  .scene-in { animation: rise .55s cubic-bezier(.2,.7,.2,1) both; animation-delay: var(--d, 0s); }
+  .scene-pop { animation: pop .35s cubic-bezier(.2,.9,.3,1.3) both; animation-delay: var(--d, 0s); }
+  .scene-draw { transform-origin: left; animation: draw .9s cubic-bezier(.3,.7,.2,1) both; animation-delay: var(--d, 0s); }
+  .live-dot { animation: pulse-dot 1.6s ease-in-out infinite; }
+  .tour-panel { animation: rise .35s cubic-bezier(.2,.7,.2,1) both; }
+  .grain { background-image: radial-gradient(rgba(255,255,255,.07) 1px, transparent 1px); background-size: 18px 18px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .scene-in, .scene-pop, .scene-draw, .tour-panel { animation: none !important; }
+  .live-dot { animation: none; }
+}

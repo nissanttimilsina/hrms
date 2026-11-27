@@ -52,9 +52,9 @@ export function Section({ eyebrow, title, intro, center, className, children, id
       <Container>
         {(eyebrow || title) && (
           <div className={cn('mb-10 max-w-2xl sm:mb-14', center && 'mx-auto text-center')}>
-            {eyebrow && <p className="text-sm font-semibold uppercase tracking-wider text-brand-600">{eyebrow}</p>}
-            {title && <h2 className="mt-2 text-3xl font-semibold tracking-tight sm:text-4xl">{title}</h2>}
-            {intro && <p className="mt-4 text-lg text-ink-500">{intro}</p>}
+            {eyebrow && <p className="text-sm font-medium text-brand-700">{eyebrow}</p>}
+            {title && <h2 className="mt-2 text-3xl font-semibold tracking-tight text-ink-900 sm:text-[2.6rem] sm:leading-[1.1]">{title}</h2>}
+            {intro && <p className="mt-4 text-lg text-ink-700">{intro}</p>}
           </div>
         )}
         {children}
@@ -64,7 +64,7 @@ export function Section({ eyebrow, title, intro, center, className, children, id
 }
 
 export const ButtonLink = ({ to, variant = 'primary', size = 'lg', className, children, external }) => {
-  const cls = cn('inline-flex items-center justify-center gap-2 rounded-md font-medium transition-colors',
+  const cls = cn('inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600',
     size === 'lg' ? 'h-12 px-6 text-base' : 'h-10 px-4 text-sm',
     variant === 'primary' && 'bg-brand-600 text-white hover:bg-brand-700',
     variant === 'secondary' && 'border border-line-strong bg-surface text-ink-900 hover:bg-subtle',
@@ -124,7 +124,7 @@ export function Header() {
             <div className="grid w-[720px] grid-cols-3 gap-1 rounded-xl border border-line bg-white p-4 shadow-pop">
               {FEATURE_CATEGORIES.map((cat) => (
                 <div key={cat} className="p-2">
-                  <p className="mb-1 text-xs font-semibold uppercase tracking-wider text-ink-400">{cat}</p>
+                  <p className="mb-1 px-2 text-xs font-medium text-ink-400">{cat}</p>
                   {FEATURES.filter((f) => f.category === cat).map((f) => (
                     <Link key={f.slug} to={`/features/${f.slug}`} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-ink-700 hover:bg-subtle">
                       <Icon name={f.icon} className="size-4 text-brand-600" />{f.name}
@@ -228,18 +228,17 @@ export function Footer() {
   );
 }
 
-export function CtaBand({ title = 'Ready to simplify HR?', text = 'Start your free trial today. No payment details needed.' }) {
+export function CtaBand({ title = 'Run next month’s payroll on Lishnu HRMS', text = 'Set up your company, add your people and try every feature free. No payment details needed.' }) {
   return (
-    <section className="py-16 sm:py-20">
-      <Container>
-        <div className="relative overflow-hidden rounded-2xl bg-brand-900 px-6 py-12 text-center sm:px-12 sm:py-16">
-          <div className="pointer-events-none absolute inset-0 opacity-[0.07]" style={{ backgroundImage: 'radial-gradient(circle at 1px 1px, white 1px, transparent 0)', backgroundSize: '22px 22px' }} />
-          <h2 className="relative text-3xl font-semibold tracking-tight text-white sm:text-4xl">{title}</h2>
-          <p className="relative mx-auto mt-3 max-w-xl text-lg text-brand-100">{text}</p>
-          <div className="relative mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-            <ButtonLink to="/signup" variant="inverse">Start free trial</ButtonLink>
-            <ButtonLink to="/demo" variant="secondary" className="border-white/30 bg-transparent text-white hover:bg-white/10">Book a demo</ButtonLink>
-          </div>
+    <section className="grain bg-night text-white">
+      <Container className="flex flex-col gap-8 py-16 sm:py-20 lg:flex-row lg:items-end lg:justify-between">
+        <div className="max-w-2xl">
+          <h2 className="text-3xl font-semibold tracking-tight text-white sm:text-[2.6rem] sm:leading-[1.1]">{title}</h2>
+          <p className="mt-4 text-lg text-white/70">{text}</p>
+        </div>
+        <div className="flex shrink-0 flex-col gap-3 sm:flex-row">
+          <ButtonLink to="/signup" variant="inverse">Start free trial</ButtonLink>
+          <ButtonLink to="/demo" variant="secondary" className="border-white/25 bg-transparent text-white hover:bg-white/10">Book a demo</ButtonLink>
         </div>
       </Container>
     </section>

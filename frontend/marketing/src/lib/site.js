@@ -1,12 +1,13 @@
 import { createApiClient } from '@hrms/shared-ui/api';
 
 /** Site-wide configuration. Override with Vite env vars at build time. */
+const ROOT = import.meta.env.VITE_ROOT_DOMAIN || 'yourhrms.com';
 export const SITE = {
   name: import.meta.env.VITE_BRAND_NAME || 'Lishnu HRMS',
   company: 'Lishnu Tech Pvt. Ltd.',
-  rootDomain: import.meta.env.VITE_ROOT_DOMAIN || 'yourhrms.com',
-  url: import.meta.env.VITE_SITE_URL || 'https://www.yourhrms.com',
-  email: import.meta.env.VITE_CONTACT_EMAIL || 'hello@yourhrms.com',
+  rootDomain: ROOT,
+  url: import.meta.env.VITE_SITE_URL || `https://www.${ROOT}`,
+  email: import.meta.env.VITE_CONTACT_EMAIL || `hello@${ROOT}`,
   phone: import.meta.env.VITE_CONTACT_PHONE || '',
   address: 'Kathmandu, Nepal',
 };
