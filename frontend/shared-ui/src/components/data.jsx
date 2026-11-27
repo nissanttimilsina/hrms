@@ -6,11 +6,24 @@ import { Skeleton, EmptyState, Button } from './primitives.jsx';
  * columns: [{ key, header, render?(row), sortable?, align?, width? }]
  */
 export function DataTable({
-  columns, rows, loading, rowKey = 'id', sort, order, onSort, empty, onRowClick, meta, onPage, caption,
+  columns, rows, loading, rowKey = 'id', sort, order, onSort, empty, onRowClick, meta, onPage, caption, mobile,
 }) {
+  // `mobile(row)`: optional compact layout for phones. When given, rows show as a stacked list below
+  // the sm breakpoint and as the table from sm up, so no column is hidden off-screen on a phone.
   return (
     <div className="overflow-hidden rounded-lg border border-line bg-surface shadow-card">
-      <div className="overflow-x-auto">
+      {mobile && (
+        <ul className="divide-y divide-line sm:hidden">
+          {loading && [...Array(4)].map((_, i) => <li key={`s${i}`} className="px-4 py-3"><Skeleton className="h-4 w-2/3" /><Skeleton className="mt-2 h-3 w-1/3" /></li>)}
+          {!loading && rows.map((row) => (
+            <li key={row[rowKey]} className={cn('px-4 py-3 text-sm text-ink-700', onRowClick && 'cursor-pointer active:bg-subtle')} onClick={onRowClick ? () => onRowClick(row) : undefined}>
+              {mobile(row)}
+            </li>
+          ))}
+          {!loading && rows.length === 0 && <li>{empty ?? <EmptyState title="Nothing here yet" description="Records you add will appear here." />}</li>}
+        </ul>
+      )}
+      <div className={cn('relative overflow-x-auto', mobile && 'hidden sm:block')}>
         <table className="w-full text-left text-sm">
           {caption && <caption className="sr-only">{caption}</caption>}
           <thead className="border-b border-line bg-subtle">

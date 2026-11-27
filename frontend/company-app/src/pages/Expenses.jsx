@@ -12,6 +12,28 @@ const STATUS_TEXT = {
   PAID: 'Paid', REJECTED: 'Rejected', CANCELLED: 'Cancelled',
 };
 
+// "Finance" → "finance", but a person's name keeps its capitals ("Ram Shrestha (manager)").
+const lowerFirst = (s) => (/ \(manager\)$/.test(s) ? s : s.charAt(0).toLowerCase() + s.slice(1));
+
+/** Compact claim row for phones: what, who/when, amount and status side by side. */
+function ClaimRow({ r, top, sub }) {
+  return (
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0">
+        {top && <p className="font-medium text-ink-900">{top}</p>}
+        <p className={cn('truncate', top ? 'text-ink-700' : 'font-medium text-ink-900')}>{r.title}</p>
+        <p className="text-xs text-ink-400">{sub}</p>
+      </div>
+      <div className="shrink-0 text-right">
+        <p className="font-medium tabular-nums text-ink-900">{npr(r.amount)}</p>
+        {r.approvedAmount != null && r.approvedAmount < r.amount && <p className="text-xs text-warning-700">{npr(r.approvedAmount)} approved</p>}
+        {r.overLimit && <p className="text-xs text-warning-700">over limit</p>}
+        <div className="mt-1"><StatusBadge value={r.status} /></div>
+      </div>
+    </div>
+  );
+}
+
 const usePolicy = () => useQuery({ queryKey: ['expense-policy'], queryFn: () => api.get('/expenses/policy'), staleTime: 300_000 });
 
 const SumTile = ({ label, value, hint, icon: Icon, tone }) => (
@@ -116,6 +138,7 @@ export function MyExpenses() {
         <SumTile label="Paid this fiscal year" value={m ? npr(m.paidThisYear) : '…'} icon={CheckCircle2} tone="success" />
       </div>
       <DataTable loading={list.loading} rows={list.rows} meta={list.meta} onPage={list.page} onRowClick={(r) => nav(`/me/expenses/${r.id}`)}
+        mobile={(r) => <ClaimRow r={r} sub={`${r.key} · ${r.categoryName} · ${dt(r.expenseDate)}`} />}
         empty={<EmptyState icon={<Receipt className="size-5" />} title="No claims yet" description="Spent money for work? Submit a claim with the receipt and track it here." action={<Button onClick={() => setOpen(true)}>New claim</Button>} />}
         columns={[
           { key: 'key', header: 'Claim', render: (r) => <><p className="font-medium text-ink-900">{r.title}</p><p className="text-xs text-ink-400">{r.key} · {r.categoryName}</p></> },
@@ -170,7 +193,7 @@ export function ExpenseDetail() {
               </div>
               <div className="text-right">
                 <StatusBadge value={c.status} />
-                <p className="mt-1 text-sm text-ink-500">{c.waitingFor ? `Waiting for ${c.waitingFor.toLowerCase()}` : STATUS_TEXT[c.status]}</p>
+                <p className="mt-1 text-sm text-ink-500">{c.waitingFor ? `Waiting for ${lowerFirst(c.waitingFor)}` : c.status === 'PAID' ? (c.payoutMethod === 'PAYROLL' ? `With the ${c.payrollLabel} salary` : 'Paid directly') : STATUS_TEXT[c.status]}</p>
               </div>
             </CardBody>
           </Card>
@@ -179,7 +202,7 @@ export function ExpenseDetail() {
             <CardBody>
               <KV items={[
                 ['Employee', c.employee ? `${c.employee.name} (${c.employee.code})` : null], ['Date of expense', dt(c.expenseDate)], ['Category', c.categoryName], ['Paid to', c.merchant],
-                c.payoutMethod && ['Paid via', c.payoutMethod === 'PAYROLL' ? `Salary, ${c.payrollLabel}` : 'Direct payment'], c.paymentRef && ['Payment reference', c.paymentRef],
+                c.payoutMethod && ['Paid via', c.payoutMethod === 'PAYROLL' ? `Salary, ${c.payrollLabel}` : 'Direct payment'], c.paymentRef && c.payoutMethod !== 'PAYROLL' && ['Payment reference', c.paymentRef],
               ]} />
               {c.description && <p className="mt-4 whitespace-pre-wrap rounded-md bg-subtle p-3 text-sm text-ink-700">{c.description}</p>}
               <div className="mt-4">
@@ -201,7 +224,7 @@ export function ExpenseDetail() {
                   {e.note && <p className="mt-1 text-sm text-ink-700">{e.note}</p>}
                 </li>
               ))}
-              {c.waitingFor && <li className="relative"><span className="absolute -left-[26px] top-1 size-3 rounded-full border-2 border-line-strong bg-surface" aria-hidden="true" /><p className="text-sm text-ink-500">Next: {c.waitingFor.toLowerCase()}</p></li>}
+              {c.waitingFor && <li className="relative"><span className="absolute -left-[26px] top-1 size-3 rounded-full border-2 border-line-strong bg-surface" aria-hidden="true" /><p className="text-sm text-ink-500">Next: {lowerFirst(c.waitingFor)}</p></li>}
             </ol>
           </CardBody>
         </Card>
@@ -307,6 +330,7 @@ export function Expenses() {
         </div>
       )}
       <DataTable loading={list.loading} rows={list.rows} meta={list.meta} onPage={list.page} onRowClick={(r) => nav(`/expenses/${r.id}`)}
+        mobile={(r) => <ClaimRow r={r} top={r.employee.name} sub={`${r.key} · ${dt(r.expenseDate)}${r.hasReceipt ? '' : ' · no receipt'}`} />}
         empty={<EmptyState icon={<CheckCircle2 className="size-5" />} title={tab === 'queue' ? 'Nothing waiting for you' : 'No claims yet'} description={tab === 'queue' ? 'New claims from your team will appear here.' : undefined} />}
         columns={[
           { key: 'employee', header: 'Employee', render: (r) => <><p className="font-medium text-ink-900">{r.employee.name}</p><p className="text-xs text-ink-400">{r.employee.code}</p></> },
@@ -364,7 +388,7 @@ export function ExpenseSettings() {
         <CardHeader title="Categories" description="A limit is per claim. Claims above it are flagged for approvers, who can approve less." actions={<Button size="sm" variant="secondary" onClick={() => setP({ ...p, categories: [...p.categories, { code: '', name: '', limit: null, active: true }] })}>Add category</Button>} />
         <div className="divide-y divide-line">
           {p.categories.map((c, i) => (
-            <div key={i} className="grid grid-cols-2 items-end gap-3 px-5 py-3 sm:grid-cols-[110px_1fr_160px_auto] [&>*]:min-w-0">
+            <div key={i} className="grid grid-cols-[96px_1fr] items-end gap-3 px-5 py-3 sm:grid-cols-[110px_1fr_160px_auto] [&>*]:min-w-0">
               <Field label="Code"><Input value={c.code} maxLength={20} onChange={(e) => setCat(i, { code: e.target.value.toUpperCase() })} /></Field>
               <Field label="Name"><Input value={c.name} maxLength={40} onChange={(e) => setCat(i, { name: e.target.value })} /></Field>
               <Field label="Limit (NPR)"><Input type="number" min="0" placeholder="No limit" value={c.limit ?? ''} onChange={(e) => setCat(i, { limit: e.target.value === '' ? null : e.target.value })} /></Field>

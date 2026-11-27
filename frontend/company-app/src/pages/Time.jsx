@@ -59,7 +59,18 @@ export function MyAttendance() {
         <Field label="To"><Input type="date" value={range.to} onChange={(e) => setRange({ ...range, to: e.target.value })} /></Field>
       </div>
       {s && <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-5"><Stat label="Present" value={s.present} /><Stat label="Late" value={s.late} /><Stat label="Absent" value={s.absent} /><Stat label="Leave" value={s.paidLeave + s.unpaidLeave} /><Stat label="Overtime" value={hours(s.overtimeMinutes)} /></div>}
-      <DataTable loading={isPending} rows={data?.records ?? []} empty={<EmptyState title="No attendance in this range" />} columns={[
+      <DataTable loading={isPending} rows={data?.records ?? []} empty={<EmptyState title="No attendance in this range" />}
+        mobile={(r) => (
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="font-medium text-ink-900">{dt(r.workDate)}</p>
+              <p className="text-xs tabular-nums text-ink-500">In {timeOf(r.clockIn)} · Out {timeOf(r.clockOut)}{r.workedMinutes > 0 ? ` · ${hours(r.workedMinutes)}` : ''}</p>
+              <div className="mt-1"><StatusBadge value={r.status} /></div>
+            </div>
+            <Button size="sm" variant="ghost" onClick={() => setCorr({ workDate: r.workDate })}>Correct</Button>
+          </div>
+        )}
+        columns={[
         { key: 'workDate', header: 'Date', render: (r) => dt(r.workDate) }, { key: 'in', header: 'In', render: (r) => timeOf(r.clockIn) }, { key: 'out', header: 'Out', render: (r) => timeOf(r.clockOut) },
         { key: 'workedMinutes', header: 'Worked', render: (r) => hours(r.workedMinutes) }, { key: 'status', header: 'Status', render: (r) => <StatusBadge value={r.status} /> },
         { key: 'x', header: '', render: (r) => <Button size="sm" variant="ghost" onClick={() => setCorr({ workDate: r.workDate })}>Correct</Button> },
@@ -70,7 +81,7 @@ export function MyAttendance() {
             <li key={c.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 text-sm">
               <span className="w-28 font-medium text-ink-900">{dt(c.workDate)}</span>
               <span className="tabular-nums text-ink-700">{c.clockIn ? `In ${timeOf(c.clockIn)}` : ''}{c.clockIn && c.clockOut ? ' · ' : ''}{c.clockOut ? `Out ${timeOf(c.clockOut)}` : ''}</span>
-              <span className="min-w-0 flex-1 truncate text-ink-500">{c.reason}{c.reviewNote ? ` · Reviewer: ${c.reviewNote}` : ''}</span>
+              <span className="order-last basis-full text-ink-500 sm:order-none sm:min-w-0 sm:flex-1 sm:basis-auto sm:truncate">{c.reason}{c.reviewNote ? ` · Reviewer: ${c.reviewNote}` : ''}</span>
               <StatusBadge value={c.status} />
               {c.status === 'PENDING' && <Button size="sm" variant="ghost" loading={cancelCorr.isPending} onClick={() => cancelCorr.mutate(c.id)}>Cancel</Button>}
             </li>

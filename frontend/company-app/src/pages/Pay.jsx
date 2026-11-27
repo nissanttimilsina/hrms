@@ -96,7 +96,7 @@ export function PayrollRunDetail() {
           {item.anomalies.length > 0 && <ul className="mb-3 rounded-md bg-warning-50 p-3 text-sm text-warning-700">{item.anomalies.map((x) => <li key={x}>• {x}</li>)}</ul>}
           <p className="mb-3 text-xs text-ink-500">Attendance: {item.attendance.present ?? 0} present · {item.attendance.late ?? 0} late · {item.attendance.absent ?? 0} absent · {item.attendance.paidLeave ?? 0} paid leave · {item.attendance.unpaidLeave ?? 0} unpaid leave · {((item.attendance.overtimeMinutes ?? 0) / 60).toFixed(1)} h overtime</p>
           <div className="grid gap-4 text-sm sm:grid-cols-2">
-            {['EARNING', 'DEDUCTION'].map((k) => <div key={k}><p className="mb-1 text-xs font-semibold uppercase text-ink-400">{k === 'EARNING' ? 'Earnings' : 'Deductions'}</p>{item.lines.filter((l) => l.kind === k).map((l, i) => <p key={i} className="flex justify-between"><span>{l.name}</span><span className="tabular-nums">{npr(l.amount)}</span></p>)}</div>)}
+            {['EARNING', 'DEDUCTION'].map((k) => <div key={k}><p className="mb-1 text-xs font-semibold uppercase text-ink-400">{k === 'EARNING' ? 'Earnings' : 'Deductions'}</p>{item.lines.filter((l) => l.kind === k).map((l, i) => <p key={i} className="flex justify-between"><span>{l.name}</span><span className="shrink-0 whitespace-nowrap tabular-nums">{npr(l.amount)}</span></p>)}</div>)}
           </div>
           <details className="mt-4 text-sm"><summary className="cursor-pointer text-brand-700">How tax was calculated</summary>
             <div className="mt-2 space-y-1 text-ink-700">
@@ -231,7 +231,7 @@ export function MyTax() {
         <Card><EmptyState title={`No payslips for FY ${s.fiscalYear} yet`} description="Your tax summary appears here once your first payslip of the year is published." /></Card>
       ) : (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 [&>*]:min-w-0">
             <Stat label="Tax paid so far" value={npr(t.tds)} hint={`${s.months.length} month(s)`} />
             <Stat label="Estimated for the year" value={p ? npr(p.annualTax) : '—'} hint={p ? `As of ${p.asOf}` : undefined} />
             <Stat label="Still to be deducted" value={p ? npr(p.remaining) : '—'} hint={p && p.monthsRemaining ? `Over ${p.monthsRemaining} more month(s)` : undefined} />
@@ -243,7 +243,14 @@ export function MyTax() {
               <div className="mt-2 h-2 rounded-full bg-subtle"><div className="h-full rounded-full bg-brand-600" style={{ width: `${pct}%` }} /></div>
             </CardBody></Card>
           )}
-          <DataTable rows={s.months} rowKey="period" columns={[
+          <DataTable rows={s.months} rowKey="period"
+            mobile={(m) => (
+              <>
+                <div className="flex items-baseline justify-between gap-3"><p className="font-medium text-ink-900">{m.label}</p><p className="tabular-nums text-ink-900">Tax <strong>{npr(m.tds)}</strong></p></div>
+                <p className="mt-0.5 text-xs tabular-nums text-ink-500">Gross {npr(m.gross)} · SSF {npr(m.ssf)}{m.pf + m.cit > 0 ? ` · PF + CIT ${npr(m.pf + m.cit)}` : ''} · Net {npr(m.net)}</p>
+              </>
+            )}
+            columns={[
             { key: 'label', header: 'Month', render: (m) => <span className="font-medium text-ink-900">{m.label}</span> },
             { key: 'gross', header: 'Gross', align: 'right', render: (m) => npr(m.gross) },
             { key: 'ssf', header: 'SSF', align: 'right', render: (m) => npr(m.ssf) },
@@ -255,13 +262,13 @@ export function MyTax() {
             <Card>
               <CardHeader title="How your yearly tax is estimated" description={`Based on your ${p.asOf} payslip. It assumes the same pay for the rest of the year.`} />
               <CardBody className="space-y-1.5 text-sm text-ink-700">
-                <p className="flex justify-between gap-3"><span>Estimated income for the year (incl. employer contributions)</span><span className="tabular-nums">{npr(p.projectedIncome)}</span></p>
-                <p className="flex justify-between gap-3"><span>Less retirement savings (SSF, PF, CIT, within the legal cap)</span><span className="tabular-nums">−{npr(p.retirementDeduction)}</span></p>
-                {p.insuranceDeduction > 0 && <p className="flex justify-between gap-3"><span>Less insurance premiums</span><span className="tabular-nums">−{npr(p.insuranceDeduction)}</span></p>}
-                <p className="flex justify-between gap-3 border-t border-line pt-1.5 font-medium text-ink-900"><span>Taxable income</span><span className="tabular-nums">{npr(p.annualTaxable)}</span></p>
-                {p.bands.map((b, i) => <p key={i} className="flex justify-between gap-3 pl-3 text-ink-500"><span>{npr(b.taxable)} at {b.rate}%{b.sst ? (p.sstWaived ? ' (social security tax, waived for SSF members)' : ' (social security tax)') : ''}</span><span className="tabular-nums">{npr(b.tax)}</span></p>)}
-                {p.femaleRebate > 0 && <p className="flex justify-between gap-3"><span>Less 10% rebate for women</span><span className="tabular-nums">−{npr(p.femaleRebate)}</span></p>}
-                <p className="flex justify-between gap-3 border-t border-line pt-1.5 font-semibold text-ink-900"><span>Estimated tax for the year</span><span className="tabular-nums">{npr(p.annualTax)}</span></p>
+                <p className="flex justify-between gap-3"><span>Estimated income for the year (incl. employer contributions)</span><span className="shrink-0 whitespace-nowrap tabular-nums">{npr(p.projectedIncome)}</span></p>
+                <p className="flex justify-between gap-3"><span>Less retirement savings (SSF, PF, CIT, within the legal cap)</span><span className="shrink-0 whitespace-nowrap tabular-nums">−{npr(p.retirementDeduction)}</span></p>
+                {p.insuranceDeduction > 0 && <p className="flex justify-between gap-3"><span>Less insurance premiums</span><span className="shrink-0 whitespace-nowrap tabular-nums">−{npr(p.insuranceDeduction)}</span></p>}
+                <p className="flex justify-between gap-3 border-t border-line pt-1.5 font-medium text-ink-900"><span>Taxable income</span><span className="shrink-0 whitespace-nowrap tabular-nums">{npr(p.annualTaxable)}</span></p>
+                {p.bands.map((b, i) => <p key={i} className="flex justify-between gap-3 pl-3 text-ink-500"><span>{npr(b.taxable)} at {b.rate}%{b.sst ? (p.sstWaived ? ' (social security tax, waived for SSF members)' : ' (social security tax)') : ''}</span><span className="shrink-0 whitespace-nowrap tabular-nums">{npr(b.tax)}</span></p>)}
+                {p.femaleRebate > 0 && <p className="flex justify-between gap-3"><span>Less 10% rebate for women</span><span className="shrink-0 whitespace-nowrap tabular-nums">−{npr(p.femaleRebate)}</span></p>}
+                <p className="flex justify-between gap-3 border-t border-line pt-1.5 font-semibold text-ink-900"><span>Estimated tax for the year</span><span className="shrink-0 whitespace-nowrap tabular-nums">{npr(p.annualTax)}</span></p>
                 <p className="pt-2 text-xs text-ink-500">To lower your tax legally, ask HR about CIT contributions or recording your life and health insurance premiums. Tax rules come from the Finance Act and are checked each year.</p>
               </CardBody>
             </Card>

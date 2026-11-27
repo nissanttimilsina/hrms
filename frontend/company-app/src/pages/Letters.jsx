@@ -107,26 +107,44 @@ export function Letters() {
           {a.can('letters:configure') && <Button variant="secondary" onClick={() => setDlg({ kind: 'letterhead' })}>Letterhead</Button>}
         </>} />
       <DataTable loading={isPending} rows={data ?? []}
+        mobile={(r) => (
+          <>
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="font-medium text-ink-900">{r.employee.name} <span className="text-xs font-normal text-ink-400">{r.employee.code}</span></p>
+                <p>{r.typeLabel}</p>
+                <p className="truncate text-xs text-ink-500">{r.purpose}</p>
+                <p className="text-xs text-ink-400">Requested {dt(r.createdAt)}{r.reference ? ` · ${r.reference}` : ''}</p>
+              </div>
+              <StatusBadge value={r.status} />
+            </div>
+            {(r.abilities.issue || r.abilities.reject || r.abilities.download || r.abilities.revoke) && <LetterActions r={r} setDlg={setDlg} download={download} className="mt-2" />}
+          </>
+        )}
         empty={<EmptyState icon={<FileText className="size-5" />} title={status === 'PENDING' ? 'No requests waiting' : 'Nothing here'} description={status === 'PENDING' ? 'When an employee requests a letter it appears here.' : undefined} />}
         columns={[
           { key: 'employee', header: 'Employee', render: (r) => <><p className="font-medium text-ink-900">{r.employee.name}</p><p className="text-xs text-ink-400">{r.employee.code}</p></> },
           { key: 'type', header: 'Letter', render: (r) => <><p>{r.typeLabel}</p><p className="max-w-72 truncate text-xs text-ink-500">{r.purpose}</p></> },
           { key: 'createdAt', header: 'Requested', render: (r) => dt(r.createdAt) },
           { key: 'status', header: 'Status', render: (r) => <><StatusBadge value={r.status} />{r.reference && <p className="mt-0.5 text-xs text-ink-400">{r.reference}</p>}</> },
-          { key: 'x', header: '', render: (r) => (
-            <div className="flex justify-end gap-1">
-              {r.abilities.issue && <Button size="sm" onClick={() => setDlg({ kind: 'issue', l: r })}>Review and issue</Button>}
-              {r.abilities.reject && <Button size="sm" variant="ghost" onClick={() => setDlg({ kind: 'reject', l: r })}>Reject</Button>}
-              {r.abilities.download && <Button size="sm" variant="secondary" onClick={() => download(r)}><Download className="size-4" /><span className="sr-only sm:not-sr-only">PDF</span></Button>}
-              {r.abilities.revoke && <Button size="sm" variant="ghost" onClick={() => setDlg({ kind: 'revoke', l: r })}>Withdraw</Button>}
-            </div>
-          ) },
+          { key: 'x', header: '', render: (r) => <LetterActions r={r} setDlg={setDlg} download={download} className="justify-end" /> },
         ]} />
       {dlg?.kind === 'issue' && <IssueDialog l={dlg.l} action={issue} onClose={() => setDlg(null)} />}
       {dlg?.kind === 'reject' && <NoteDialog title={`Reject ${dlg.l.typeLabel.toLowerCase()} request?`} label="Reason (the employee sees this)" submitLabel="Reject" danger action={reject} onSubmit={(reason) => reject.mutate({ id: dlg.l.id, reason })} onClose={() => setDlg(null)} />}
       {dlg?.kind === 'revoke' && <NoteDialog title={`Withdraw ${dlg.l.reference}?`} description="The employee can no longer download it, and the verification page shows it as withdrawn." label="Reason" submitLabel="Withdraw letter" danger action={revoke} onSubmit={(reason) => revoke.mutate({ id: dlg.l.id, reason })} onClose={() => setDlg(null)} />}
       {dlg?.kind === 'letterhead' && <LetterheadDialog onClose={() => setDlg(null)} />}
     </>
+  );
+}
+
+function LetterActions({ r, setDlg, download, className }) {
+  return (
+    <div className={cn('flex flex-wrap gap-1', className)}>
+      {r.abilities.issue && <Button size="sm" onClick={() => setDlg({ kind: 'issue', l: r })}>Review and issue</Button>}
+      {r.abilities.reject && <Button size="sm" variant="ghost" onClick={() => setDlg({ kind: 'reject', l: r })}>Reject</Button>}
+      {r.abilities.download && <Button size="sm" variant="secondary" onClick={() => download(r)}><Download className="size-4" />PDF</Button>}
+      {r.abilities.revoke && <Button size="sm" variant="ghost" onClick={() => setDlg({ kind: 'revoke', l: r })}>Withdraw</Button>}
+    </div>
   );
 }
 
