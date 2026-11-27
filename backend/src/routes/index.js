@@ -16,6 +16,7 @@ import { workspaceRouter } from '../modules/workspace/workspace.routes.js';
 import { payrollRouter } from '../modules/payroll/payroll.routes.js';
 import { reportsRouter } from '../modules/reports/reports.routes.js';
 import { devicesRouter } from '../modules/devices/devices.routes.js';
+import { tasksRouter, projectsRouter, workReportsRouter, performanceRouter } from '../modules/work/work.routes.js';
 
 /**
  * /api/v1 route map.
@@ -53,6 +54,10 @@ export function apiRouter() {
   tenant.use('/payroll', payrollRouter);
   tenant.use('/reports', reportsRouter);
   tenant.use('/devices', devicesRouter);
+  tenant.use('/tasks', tasksRouter);
+  tenant.use('/projects', projectsRouter);
+  tenant.use('/work-reports', workReportsRouter);
+  tenant.use('/performance', performanceRouter);
   tenant.use('/', workspaceRouter); // /dashboard, /announcements, /notifications, /settings
   r.use(tenant);
 

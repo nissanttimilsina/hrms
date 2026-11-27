@@ -16,6 +16,7 @@ import { validate } from '../../middleware/common.js';
 import { localDate, fiscalYear, fiscalYearRange, addDays, toBS, BS_MONTHS } from '../../services/hr/calendar.js';
 import { scopedEmployeeIds } from '../../services/hr/attendance.js';
 import { audit, tenantActor } from '../../services/audit.service.js';
+import { performance } from '../../services/work.service.js';
 import { asyncHandler, ok } from '../../utils/http.js';
 import { BadRequest, Forbidden, FeatureNotInPlan } from '../../utils/errors.js';
 
@@ -285,6 +286,58 @@ const REPORTS = {
     };
   },
 
+  /** Per-employee performance: task delivery, daily-report compliance, manager ratings, punctuality. */
+  async performance(req, t, q, tz) {
+    const { from, to } = range(q, tz);
+    const f = await employeeFilter(req, t);
+    const ids = (await sel(t, `SELECT e.id FROM employees e WHERE ${f.sql}`, f.rep)).map((r) => r.id);
+    const data = await performance(t, { ids, from, to, tz, today: localDate(new Date(), tz) });
+    const rows = data.map((r) => ({
+      employee: r.employee.name, code: r.employee.employeeCode, department: r.employee.department ?? '—',
+      score: r.score ?? '—', completed: r.tasks.completed, on_time: r.tasks.onTimeRate != null ? `${r.tasks.onTimeRate}%` : '—', overdue: r.tasks.overdue, open: r.tasks.open,
+      reports: r.reports.submitted, report_rate: r.reports.rate != null ? `${r.reports.rate}%` : '—', rating: r.reports.avgRating ?? '—', hours: round(r.reports.hours, 1),
+      present: r.attendance.present, late: r.attendance.late,
+    }));
+    const scored = data.filter((r) => r.score != null);
+    const sum = (fn) => data.reduce((s, r) => s + fn(r), 0);
+    return {
+      title: 'Employee performance', period: { from, to },
+      summary: [['Employees', data.length], ['Average score', scored.length ? Math.round(scored.reduce((s, r) => s + r.score, 0) / scored.length) : '—'],
+        ['Tasks completed', sum((r) => r.tasks.completed)], ['Overdue now', sum((r) => r.tasks.overdue)], ['Daily reports', sum((r) => r.reports.submitted)]],
+      chart: { type: 'bar', x: 'employee', series: [['completed', 'Tasks completed'], ['overdue', 'Overdue']], data: rows.slice(0, 20) },
+      table: { columns: [['employee', 'Employee'], ['code', 'ID'], ['department', 'Department'], ['score', 'Score'], ['completed', 'Completed'], ['on_time', 'On time'], ['overdue', 'Overdue'], ['open', 'Open'],
+        ['reports', 'Reports'], ['report_rate', 'Report rate'], ['rating', 'Avg rating'], ['hours', 'Hours reported'], ['present', 'Days present'], ['late', 'Late']], rows },
+    };
+  },
+
+  /** Task register: every task due or completed in the range, with delivery against the due date. */
+  async tasks(req, t, q, tz) {
+    const { from, to } = range(q, tz);
+    const f = await employeeFilter(req, t);
+    const rows = await sel(t, `
+      SELECT 'T-' || k.number AS key, k.title, e.first_name || ' ' || e.last_name AS assignee, coalesce(p.name, '—') AS project,
+             initcap(k.priority) AS priority, replace(initcap(k.status), '_', ' ') AS status, k.progress, k.due_on::text AS due,
+             (k.completed_at AT TIME ZONE :tz)::date::text AS completed,
+             CASE WHEN k.status = 'DONE' AND k.due_on IS NOT NULL THEN CASE WHEN (k.completed_at AT TIME ZONE :tz)::date <= k.due_on THEN 'Yes' ELSE 'Late' END
+                  WHEN k.status IN ('TODO','IN_PROGRESS','BLOCKED','IN_REVIEW') AND k.due_on < :today THEN 'Overdue' ELSE '' END AS on_time,
+             k.estimate_hours::float AS estimate, k.logged_hours::float AS logged
+        FROM tasks k JOIN employees e ON e.tenant_id = k.tenant_id AND e.id = k.assignee_id
+        LEFT JOIN projects p ON p.tenant_id = k.tenant_id AND p.id = k.project_id
+       WHERE k.deleted_at IS NULL AND ${f.sql}
+         AND (k.due_on BETWEEN :from AND :to OR (k.completed_at AT TIME ZONE :tz)::date BETWEEN :from AND :to
+              OR (k.created_at AT TIME ZONE :tz)::date BETWEEN :from AND :to)
+       ORDER BY k.due_on NULLS LAST, k.number`, { ...f.rep, from, to, tz, today: localDate(new Date(), tz) });
+    const c = (st) => rows.filter((r) => r.status === st).length;
+    const byStatus = ['To do', 'In progress', 'Blocked', 'In review', 'Done', 'Cancelled'].map((st) => ({ status: st, count: rows.filter((r) => r.status.toLowerCase() === st.toLowerCase()).length }));
+    return {
+      title: 'Task register', period: { from, to },
+      summary: [['Tasks', rows.length], ['Done', c('Done')], ['Completed on time', rows.filter((r) => r.on_time === 'Yes').length], ['Completed late', rows.filter((r) => r.on_time === 'Late').length], ['Overdue now', rows.filter((r) => r.on_time === 'Overdue').length]],
+      chart: { type: 'bar', x: 'status', series: [['count', 'Tasks']], data: byStatus },
+      table: { columns: [['key', 'Task'], ['title', 'Title'], ['assignee', 'Assignee'], ['project', 'Project'], ['priority', 'Priority'], ['status', 'Status'], ['progress', 'Progress %'],
+        ['due', 'Due'], ['completed', 'Completed'], ['on_time', 'On time'], ['estimate', 'Estimate h'], ['logged', 'Logged h']], rows },
+    };
+  },
+
   /** Plan, usage against limits and enabled features. */
   async subscription(req, t) {
     const ctx = req.auth.ctx;
@@ -308,8 +361,8 @@ const REPORTS = {
 
 /** Payroll figures only for people who may see other people's payroll (not OWN-scope self-service). */
 const wideGrant = (req, key) => (req.auth.grants.get(key)?.scopes ?? []).some((s) => s.scope !== 'OWN');
-const EXTRA_PERMISSION = { payroll: 'payroll:view', deductions: 'payroll:view', devices: 'devices:view', subscription: 'subscription:view' };
-const FEATURE_FOR = { payroll: 'payroll', deductions: 'payroll', devices: 'biometric', punctuality: 'attendance', attendance: 'attendance', leave: 'leave', balances: 'leave' };
+const EXTRA_PERMISSION = { performance: 'work_reports:view', tasks: 'tasks:view', payroll: 'payroll:view', deductions: 'payroll:view', devices: 'devices:view', subscription: 'subscription:view' };
+const FEATURE_FOR = { performance: 'tasks', tasks: 'tasks', payroll: 'payroll', deductions: 'payroll', devices: 'biometric', punctuality: 'attendance', attendance: 'attendance', leave: 'leave', balances: 'leave' };
 
 // ----------------------------------------------------------------------------- export
 function toCsv(report) {
@@ -382,6 +435,8 @@ reportsRouter.get('/', requirePermission('reports:view'), (req, res) => ok(res, 
   { key: 'leave', name: 'Leave utilisation', filters: ['fiscalYear', 'branch', 'department'] },
   { key: 'punctuality', name: 'Late & absences', filters: ['range', 'branch', 'department'] },
   { key: 'balances', name: 'Leave balances', filters: ['fiscalYear', 'branch', 'department'] },
+  { key: 'performance', name: 'Employee performance', filters: ['range', 'branch', 'department'], requires: 'work_reports:view' },
+  { key: 'tasks', name: 'Task register', filters: ['range', 'branch', 'department'], requires: 'tasks:view' },
   { key: 'payroll', name: 'Payroll cost', filters: ['fiscalYear', 'branch', 'department'], requires: 'payroll:view' },
   { key: 'deductions', name: 'Overtime & deductions', filters: ['fiscalYear', 'branch', 'department'], requires: 'payroll:view' },
   { key: 'devices', name: 'Device activity', filters: ['range'], requires: 'devices:view' },

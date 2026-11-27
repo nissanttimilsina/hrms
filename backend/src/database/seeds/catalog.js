@@ -15,6 +15,7 @@ export const FEATURES = [
   ['ess', 'Employee Self-Service', 'Core HR', true],
   ['documents', 'Document Records', 'Core HR', true],
   ['reports', 'Basic Reports', 'Analytics', true],
+  ['tasks', 'Tasks & Daily Work Reports', 'Core HR', true],
   ['attendance', 'Attendance Management', 'Time', false],
   ['leave', 'Leave Management', 'Time', false],
   ['shifts', 'Shift Scheduling', 'Time', false],
@@ -95,9 +96,13 @@ export const RESOURCES = {
   support: { module: 'support', actions: ['view', 'create'] },
   holidays: { module: 'leave', actions: ['view', 'create', 'edit', 'delete'] },
   announcements: { module: 'ess', actions: ['view', 'create', 'edit', 'delete'] },
+  // Work management. tasks: scope = whose tasks (by assignee). work_reports: approve = review and rate.
+  tasks: { module: 'tasks', actions: ['view', 'create', 'edit', 'delete', 'export'] },
+  work_reports: { module: 'tasks', actions: ['view', 'create', 'approve', 'export'] },
+  projects: { module: 'tasks', actions: ['view', 'create', 'edit', 'delete'] },
 };
 // Permissions that are not about records, so data scope does not apply.
-const UNSCOPED = new Set(['users', 'roles', 'settings', 'subscription', 'audit', 'workflows', 'support', 'holidays', 'announcements']);
+const UNSCOPED = new Set(['users', 'roles', 'settings', 'subscription', 'audit', 'workflows', 'support', 'holidays', 'announcements', 'projects']);
 
 export const PERMISSIONS = Object.entries(RESOURCES).flatMap(([resource, { module, actions }]) =>
   actions.map((action) => ({
@@ -118,7 +123,7 @@ export const DEFAULT_ROLES = [
   { key: 'company_admin', name: 'Company Administrator', grants: every('COMPANY') },
   { key: 'hr_manager', name: 'HR Manager', grants: [
     ...r(['branches', 'departments', 'employees', 'documents', 'attendance', 'leave', 'shifts', 'recruitment',
-      'performance', 'training', 'assets', 'reports', 'holidays', 'announcements', 'devices'], '*', 'COMPANY'),
+      'performance', 'training', 'assets', 'reports', 'holidays', 'announcements', 'devices', 'tasks', 'work_reports', 'projects'], '*', 'COMPANY'),
     ...r(['users', 'roles'], ['view'], 'COMPANY'),
     ...r(['support'], ['view', 'create'], 'COMPANY'),
   ] },
@@ -150,6 +155,9 @@ export const DEFAULT_ROLES = [
     ...r(['attendance', 'leave', 'expenses'], ['view', 'approve', 'reject'], 'DEPARTMENT'),
     ...r(['performance'], ['view', 'edit', 'approve'], 'DEPARTMENT'),
     ...r(['reports'], ['view'], 'DEPARTMENT'),
+    ...r(['tasks'], '*', 'DEPARTMENT'),
+    ...r(['work_reports'], ['view', 'approve', 'export'], 'DEPARTMENT'),
+    ...r(['projects'], ['view', 'create', 'edit'], 'COMPANY'),
   ] },
   { key: 'branch_manager', name: 'Branch Manager', grants: [
     ...r(['holidays', 'announcements'], ['view'], 'COMPANY'),
@@ -157,12 +165,18 @@ export const DEFAULT_ROLES = [
     ...r(['attendance', 'leave', 'shifts', 'expenses'], ['view', 'approve', 'reject'], 'BRANCH'),
     ...r(['performance'], ['view', 'edit', 'approve'], 'BRANCH'),
     ...r(['reports'], ['view'], 'BRANCH'),
+    ...r(['tasks'], '*', 'BRANCH'),
+    ...r(['work_reports'], ['view', 'approve', 'export'], 'BRANCH'),
+    ...r(['projects'], ['view', 'create', 'edit'], 'COMPANY'),
   ] },
   { key: 'team_leader', name: 'Team Leader', grants: [
     ...r(['holidays', 'announcements'], ['view'], 'COMPANY'),
     ...r(['employees'], ['view'], 'DIRECT_REPORTS'),
     ...r(['attendance', 'leave'], ['view', 'approve', 'reject'], 'DIRECT_REPORTS'),
     ...r(['performance'], ['view', 'edit'], 'DIRECT_REPORTS'),
+    ...r(['tasks'], ['view', 'create', 'edit', 'delete'], 'DIRECT_REPORTS'),
+    ...r(['work_reports'], ['view', 'approve'], 'DIRECT_REPORTS'),
+    ...r(['projects'], ['view', 'create'], 'COMPANY'),
   ] },
   { key: 'recruitment_officer', name: 'Recruitment Officer', grants: [
     ...r(['holidays', 'announcements'], ['view'], 'COMPANY'),
@@ -175,6 +189,9 @@ export const DEFAULT_ROLES = [
     ...r(['employees', 'documents', 'payroll'], ['view'], 'OWN'),
     ...r(['attendance', 'leave', 'expenses'], ['view', 'create'], 'OWN'),
     ...r(['branches', 'departments'], ['view'], 'COMPANY'),
+    ...r(['tasks'], ['view', 'create', 'edit'], 'OWN'),
+    ...r(['work_reports'], ['view', 'create'], 'OWN'),
+    ...r(['projects'], ['view'], 'COMPANY'),
   ] },
   { key: 'auditor', name: 'Auditor', grants: [
     ...r(Object.keys(RESOURCES), ['view', 'export'], 'COMPANY'),

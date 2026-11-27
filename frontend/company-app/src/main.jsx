@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppShell, ToastProvider, Skeleton, Button, SubscriptionBanner, BrandProvider } from '@hrms/shared-ui';
-import { LayoutDashboard, Users, Building2, Clock, CalendarDays, Wallet, Megaphone, ShieldCheck, CreditCard, LifeBuoy, Settings as Cog, Bell, UserRound, ScrollText, BarChart3, Fingerprint } from 'lucide-react';
+import { LayoutDashboard, Users, Building2, Clock, CalendarDays, Wallet, Megaphone, ShieldCheck, CreditCard, LifeBuoy, Settings as Cog, Bell, UserRound, ScrollText, BarChart3, Fingerprint, ListTodo, FileText, ClipboardCheck, TrendingUp, FolderKanban, Gauge } from 'lucide-react';
 import { AuthProvider, useAuth, api, dt } from './lib.jsx';
 import { Login, AcceptInvite, ForgotPassword, ResetPassword } from './pages/Auth.jsx';
 import { Dashboard } from './pages/Home.jsx';
@@ -12,6 +12,7 @@ import { MyAttendance, AttendanceRegister, MyLeave, LeaveApprovals, LeaveSetup }
 import { PayrollRuns, PayrollRunDetail, PayrollSetup, MyPayslips } from './pages/Pay.jsx';
 import { Reports } from './pages/Reports.jsx';
 import { Devices } from './pages/Devices.jsx';
+import { Tasks, TaskDetail, DailyReport, WorkReports, WorkReportDetail, Performance, EmployeePerformance, Projects } from './pages/Work.jsx';
 import { Access, Announcements, Billing, Support, SupportTicket, Settings, Audit, MyProfile } from './pages/Admin.jsx';
 import './styles.css';
 
@@ -21,11 +22,22 @@ function buildNav(a) {
   const me = a.employeeId;
   return [
     { items: [{ key: '/', label: 'Dashboard', icon: I(LayoutDashboard) }] },
+    me && { label: 'My work', items: [
+      f('tasks') && can('tasks:view') && { key: '/my-work/tasks', label: 'My tasks', icon: I(ListTodo) },
+      f('tasks') && can('work_reports:create') && { key: '/my-work/report', label: 'Daily report', icon: I(FileText) },
+      f('tasks') && { key: '/my-work/performance', label: 'My performance', icon: I(Gauge) },
+    ] },
     me && { label: 'My space', items: [
       { key: '/me', label: 'My profile', icon: I(UserRound) },
       f('attendance') && { key: '/me/attendance', label: 'My attendance', icon: I(Clock) },
       f('leave') && { key: '/me/leave', label: 'My leave', icon: I(CalendarDays) },
       f('payroll') && { key: '/me/payslips', label: 'My payslips', icon: I(Wallet) },
+    ] },
+    f('tasks') && { label: 'Work', items: [
+      (wide('tasks:view') || (!me && can('tasks:view'))) && { key: '/tasks', label: 'Tasks', icon: I(ListTodo) },
+      wide('work_reports:view') && { key: '/work-reports', label: 'Work reports', icon: I(ClipboardCheck) },
+      wide('work_reports:view') && { key: '/performance', label: 'Performance', icon: I(TrendingUp) },
+      can('projects:view') && (wide('tasks:view') || can('projects:create')) && { key: '/projects', label: 'Projects', icon: I(FolderKanban) },
     ] },
     { label: 'People', items: [
       wide('employees:view') && { key: '/employees', label: 'Employees', icon: I(Users) },
@@ -116,6 +128,16 @@ function Shell() {
         <div className="mx-auto max-w-7xl">
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/my-work/tasks" element={<Tasks mineOnly />} />
+            <Route path="/my-work/report" element={<DailyReport />} />
+            <Route path="/my-work/performance" element={<EmployeePerformance self />} />
+            <Route path="/tasks" element={<Tasks />} />
+            <Route path="/tasks/:id" element={<TaskDetail />} />
+            <Route path="/work-reports" element={<WorkReports />} />
+            <Route path="/work-reports/:id" element={<WorkReportDetail />} />
+            <Route path="/performance" element={<Performance />} />
+            <Route path="/performance/:id" element={<EmployeePerformance />} />
+            <Route path="/projects" element={<Projects />} />
             <Route path="/me" element={<MyProfile />} />
             <Route path="/me/attendance" element={<MyAttendance />} />
             <Route path="/me/leave" element={<MyLeave />} />

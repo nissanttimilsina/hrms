@@ -43,10 +43,13 @@ workspaceRouter.get('/dashboard', asyncHandler(async (req, res) => {
       const reg = await dailyRegister(req, t, today);
       const c = (s) => reg.filter((r) => r.status === s).length;
       d.attendanceToday = { present: c('PRESENT') + c('LATE') + c('HALF_DAY'), late: c('LATE'), onLeave: c('ON_LEAVE'), notIn: c('NOT_IN') + c('ABSENT'), total: reg.length };
-      const trend = await appDb.query(
-        `SELECT work_date::text AS date, count(*)::int AS present, count(*) FILTER (WHERE status = 'LATE')::int AS late
-           FROM attendance_records WHERE work_date BETWEEN :from AND :to GROUP BY work_date ORDER BY work_date`,
-        { replacements: { from: addDays(today, -13), to: today }, type: QueryTypes.SELECT, transaction: t },
+      const attScopes = req.auth.grants.get('attendance:view').scopes;
+      const wholeCompany = attScopes.some((s) => s.scope === 'COMPANY');
+      const ids = wholeCompany ? null : (await app.Employee.findAll({ where: { [Op.and]: [{ deletedAt: null }, scopeWhere(attScopes, req.auth.principal)] }, attributes: ['id'], raw: true, transaction: t })).map((e) => e.id);
+      const trend = ids && !ids.length ? [] : await appDb.query(
+        `SELECT work_date::text AS date, count(*) FILTER (WHERE status IN ('PRESENT','LATE','HALF_DAY'))::int AS present, count(*) FILTER (WHERE status = 'LATE')::int AS late
+           FROM attendance_records WHERE work_date BETWEEN :from AND :to ${ids ? 'AND employee_id IN (:ids)' : ''} GROUP BY work_date ORDER BY work_date`,
+        { replacements: { from: addDays(today, -13), to: today, ids: ids ?? [] }, type: QueryTypes.SELECT, transaction: t },
       );
       d.attendanceTrend = trend;
     }

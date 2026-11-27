@@ -297,6 +297,37 @@ export function defineModels(sequelize) {
   }, opts('employee_loans'));
   EmployeeLoan.belongsTo(Employee, { foreignKey: 'employeeId', as: 'employee' });
 
+  // ---------------------------------------------------------------- work management
+  const Project = sequelize.define('Project', {
+    id, tenantId, name: S, code: S, description: T, color: S, status: S, leadEmployeeId: U,
+    startsOn: DataTypes.DATEONLY, endsOn: DataTypes.DATEONLY, createdBy: U, deletedAt: D,
+  }, opts('projects'));
+  const Task = sequelize.define('Task', {
+    id, tenantId, number: I, projectId: U, title: S, description: T, assigneeId: U, createdBy: U, priority: S, status: S,
+    progress: I, requiresReview: B, startOn: DataTypes.DATEONLY, dueOn: DataTypes.DATEONLY, estimateHours: DataTypes.DECIMAL(6, 2),
+    loggedHours: DataTypes.DECIMAL(8, 2), tags: DataTypes.ARRAY(DataTypes.TEXT), blockedReason: T, completedAt: D, deletedAt: D,
+  }, opts('tasks'));
+  const TaskActivity = sequelize.define('TaskActivity', {
+    id, tenantId, taskId: U, authorId: U, kind: S, body: T, fromValue: J, toValue: J,
+  }, createdOnly('task_activity'));
+  const WorkReport = sequelize.define('WorkReport', {
+    id, tenantId, employeeId: U, reportDate: DataTypes.DATEONLY, summary: T, challenges: T, planNext: T, hours: DataTypes.DECIMAL(5, 2),
+    status: S, submittedAt: D, reviewerId: U, reviewedAt: D, rating: I, feedback: T,
+  }, opts('work_reports'));
+  const WorkReportItem = sequelize.define('WorkReportItem', {
+    id, tenantId, reportId: U, taskId: U, description: T, hours: DataTypes.DECIMAL(5, 2), progress: I, completed: B, sortOrder: I,
+  }, noTs('work_report_items'));
+  Task.belongsTo(Employee, { foreignKey: 'assigneeId', as: 'assignee' });
+  Task.belongsTo(Project, { foreignKey: 'projectId', as: 'project' });
+  Task.belongsTo(User, { foreignKey: 'createdBy', as: 'creator' });
+  Task.hasMany(TaskActivity, { foreignKey: 'taskId', as: 'activity' });
+  TaskActivity.belongsTo(User, { foreignKey: 'authorId', as: 'author' });
+  Project.belongsTo(Employee, { foreignKey: 'leadEmployeeId', as: 'lead' });
+  WorkReport.belongsTo(Employee, { foreignKey: 'employeeId', as: 'employee' });
+  WorkReport.belongsTo(User, { foreignKey: 'reviewerId', as: 'reviewer' });
+  WorkReport.hasMany(WorkReportItem, { foreignKey: 'reportId', as: 'items' });
+  WorkReportItem.belongsTo(Task, { foreignKey: 'taskId', as: 'task' });
+
   PlanEntitlement.belongsTo(FeatureCatalog, { foreignKey: 'featureId', as: 'feature' });
   Subscription.belongsTo(Plan, { foreignKey: 'planId', as: 'plan' });
   Subscription.hasMany(SubscriptionItem, { foreignKey: 'subscriptionId', as: 'items' });
@@ -315,6 +346,7 @@ export function defineModels(sequelize) {
   SupportTicket.belongsTo(Tenant, { foreignKey: 'tenantId', as: 'tenant' });
 
   return {
+    Project, Task, TaskActivity, WorkReport, WorkReportItem,
     SubscriptionRequest, TenantFeatureOverride, EmployeeLoan, AttendanceDevice, DevicePunch, DeviceLog,
     TaxRuleSet, SalaryComponent, EmployeeSalary, PayrollRun, PayrollItem, PayrollAdjustment,
     Designation, Shift, EmployeeHistory, File, AttendanceRecord, AttendanceCorrection, Holiday, LeaveType, LeaveTransaction,

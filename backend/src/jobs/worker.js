@@ -19,6 +19,7 @@ import { Op } from 'sequelize';
 import { documentExpiryAlerts } from '../services/hr/document-alerts.js';
 import { deviceOfflineAlerts, deviceRetention } from '../services/biometric/monitor.js';
 import { attendanceAlerts } from '../services/hr/attendance-alerts.js';
+import { workReminders, reportReminders } from '../services/work.service.js';
 import { subscriptionNotices } from '../services/subscription-notices.js';
 
 if (!env.REDIS_URL) {
@@ -51,6 +52,8 @@ const subscriptionWorker = new Worker(QUEUES.SUBSCRIPTIONS, async (job) => {
   if (job.name === 'document-expiry') return documentExpiryAlerts();
   if (job.name === 'device-offline') return deviceOfflineAlerts();
   if (job.name === 'attendance-alerts') return attendanceAlerts();
+  if (job.name === 'work-reminders') return workReminders();
+  if (job.name === 'report-reminders') return reportReminders();
   if (job.name === 'subscription-notices') return subscriptionNotices();
   if (job.name === 'device-retention') return deviceRetention();
   if (job.name !== 'lifecycle-sweep') return;
@@ -79,6 +82,9 @@ await subsQ.upsertJobScheduler('renewal-invoices', { pattern: '15 2 * * *', tz: 
 await subsQ.upsertJobScheduler('document-expiry', { pattern: '5 8 * * *', tz: 'Asia/Kathmandu' }, { name: 'document-expiry' });
 await subsQ.upsertJobScheduler('subscription-notices', { pattern: '30 8 * * *', tz: 'Asia/Kathmandu' }, { name: 'subscription-notices' });
 await subsQ.upsertJobScheduler('attendance-alerts', { pattern: '15 9 * * *', tz: 'Asia/Kathmandu' }, { name: 'attendance-alerts' });
+// Tasks due today / overdue (morning) and missing daily reports (evening), local time.
+await subsQ.upsertJobScheduler('work-reminders', { pattern: '30 9 * * *', tz: 'Asia/Kathmandu' }, { name: 'work-reminders' });
+await subsQ.upsertJobScheduler('report-reminders', { pattern: '0 18 * * *', tz: 'Asia/Kathmandu' }, { name: 'report-reminders' });
 await subsQ.upsertJobScheduler('device-offline', { every: 5 * 60_000 }, { name: 'device-offline' });
 await subsQ.upsertJobScheduler('device-retention', { pattern: '40 3 * * *', tz: 'Asia/Kathmandu' }, { name: 'device-retention' });
 logger.info('worker started');

@@ -17,6 +17,23 @@ const Tag = ({ tone, children }) => <span className={cn('rounded-md px-2 py-0.5 
 }[tone])}>{children}</span>;
 
 export const SCREENS = {
+  'task-management': (
+    <Screen title="Daily report, Sita Rai" meta="Thu 11 Mangsir">
+      <ul className="divide-y divide-line text-sm">
+        {[['T-14', 'Mangsir sales summary', '4 h', '60%'], ['T-17', 'Supplier price list', '2.5 h', 'Done'], [null, 'Weekly team meeting', '1 h', null]].map(([k, t, h, p]) => (
+          <li key={t} className="flex items-center gap-3 py-2.5">
+            <span className="w-10 text-xs text-ink-400">{k ?? '—'}</span><span className="flex-1 text-ink-900">{t}</span><span className="tabular-nums text-ink-500">{h}</span>
+            {p && <Tag tone={p === 'Done' ? 'ok' : 'info'}>{p}</Tag>}
+          </li>
+        ))}
+      </ul>
+      <p className="mt-3 rounded-lg bg-warning-50 p-3 text-xs text-warning-700">Challenge: Hetauda branch figures are late.</p>
+      <div className="mt-4 rounded-xl border border-line p-3">
+        <div className="flex items-center justify-between"><p className="text-sm font-medium text-ink-900">Review by Ram Thapa</p><span className="flex">{[1, 2, 3, 4, 5].map((i) => <Icon key={i} name="Star" className={cn('size-4', i <= 4 ? 'fill-warning-600 text-warning-600' : 'text-line-strong')} />)}</span></div>
+        <p className="mt-1 text-sm text-ink-700">Good progress. I have called Hetauda; their numbers come by noon.</p>
+      </div>
+    </Screen>
+  ),
   'attendance-management': (
       <Screen title="Today, Baneshwor branch" meta="Thu 11 Mangsir">
         <div className="mb-4 grid grid-cols-4 gap-2 text-center">
@@ -145,6 +162,7 @@ export const SCREENS = {
 
 const TABS = [
   { key: 'attendance', label: 'Attendance', icon: 'Clock', slug: 'attendance-management', title: 'Know who is in, without asking around', points: ['Clock-in from phone, web or fingerprint and face devices', 'Late, early and missing punches flagged against each branch’s hours', 'Corrections go to the manager for approval'] },
+  { key: 'tasks', label: 'Tasks', icon: 'ListChecks', slug: 'task-management', title: 'See the work, not just the attendance', points: ['Assign tasks with priority and due date; follow progress on a board', 'Each employee sends a short daily report: work done, hours, blockers', 'Managers rate reports, give feedback and see performance over time'] },
   { key: 'leave', label: 'Leave', icon: 'CalendarDays', slug: 'leave-management', title: 'Leave balances everyone can see', points: ['Home, sick, maternity and your own leave types, preset to the Labour Act', 'Monthly accrual, carry-forward caps and encashment through payroll', 'One or two approval levels, with the team calendar in view'] },
   { key: 'payroll', label: 'Payroll', icon: 'Calculator', slug: 'payroll-management', title: 'Close the month in an afternoon', points: ['Income tax, SSF, PF and CIT from rules kept per fiscal year', 'Unpaid days explained line by line: leave, absence, lateness rule', 'Prepared by one person, approved by another, then locked'] },
   { key: 'devices', label: 'Devices', icon: 'Fingerprint', slug: 'biometric-attendance', title: 'Your fingerprint machines, connected', points: ['ZKTeco and compatible terminals push punches over the internet', 'Every branch and device on one screen, with offline alerts', 'Fingerprints and faces never leave the device'] },
