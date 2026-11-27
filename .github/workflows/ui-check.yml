@@ -85,6 +85,12 @@ jobs:
       - name: Logs
         if: always()
         run: tail -n 80 /tmp/api.log || true
+      - name: Screenshots as text (for reviewers who cannot download artifacts)
+        if: always()
+        run: |
+          echo "::group::screens.tar.gz base64"
+          echo "BEGIN-SCREENS"; tar -C /tmp/screens -cz . | base64 -w 120; echo "END-SCREENS"
+          echo "::endgroup::"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

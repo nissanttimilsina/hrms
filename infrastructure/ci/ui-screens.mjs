@@ -86,8 +86,8 @@ for (const [vpName, viewport] of Object.entries(VIEWPORTS)) {
     const expected = (x) => (!user && /401|Unauthorized/.test(x)) || (name === 'verify-unknown' && /404|Not Found/.test(x));
     issues.splice(0, issues.length, ...issues.filter((x) => !expected(x)));
     if (m.scrollWidth > m.vw) issues.push(`horizontal overflow: scrollWidth ${m.scrollWidth} > ${m.vw}`);
-    const file = `${vpName}-${name}.png`;
-    await page.screenshot({ path: join(outDir, file), fullPage: true });
+    const file = `${vpName}-${name}.jpg`;
+    await page.screenshot({ path: join(outDir, file), fullPage: true, type: 'jpeg', quality: 70 });
     report.push({ viewport: vpName, user, name, path, file, h1: m.h1, overflowing: m.wide, issues });
     console.log(`${issues.length ? 'ISSUES' : 'ok    '} ${vpName.padEnd(7)} ${name}${issues.length ? `\n         ${issues.join('\n         ')}` : ''}${m.wide.length ? `\n         wide: ${m.wide.join(' | ')}` : ''}`);
     await page.close();
