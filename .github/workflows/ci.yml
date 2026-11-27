@@ -124,7 +124,7 @@ jobs:
           push: false
           tags: hrms-api:${{ github.sha }}
           cache-from: type=gha,scope=api
-          cache-to: type=gha,mode=max,scope=api
+          cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=api' || '' }}
       - name: Web image (Nginx + marketing, admin, company app)
         uses: docker/build-push-action@v6
         with:
@@ -133,4 +133,4 @@ jobs:
           tags: hrms-web:${{ github.sha }}
           build-args: ROOT_DOMAIN=example.com
           cache-from: type=gha,scope=web
-          cache-to: type=gha,mode=max,scope=web
+          cache-to: ${{ github.event_name == 'push' && 'type=gha,mode=max,scope=web' || '' }}
