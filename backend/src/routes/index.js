@@ -19,6 +19,15 @@ import { devicesRouter } from '../modules/devices/devices.routes.js';
 import { tasksRouter, projectsRouter, workReportsRouter, performanceRouter } from '../modules/work/work.routes.js';
 import { expensesRouter } from '../modules/expenses/expenses.routes.js';
 import { lettersRouter, letterVerifyRouter } from '../modules/letters/letters.routes.js';
+import { assetsRouter } from '../modules/assets/assets.routes.js';
+import { onboardingRouter } from '../modules/onboarding/onboarding.routes.js';
+import { recruitmentRouter, careersRouter } from '../modules/recruitment/recruitment.routes.js';
+import { helpdeskRouter } from '../modules/helpdesk/helpdesk.routes.js';
+import { trainingRouter } from '../modules/training/training.routes.js';
+import { appraisalsRouter } from '../modules/appraisals/appraisals.routes.js';
+import { engagementRouter } from '../modules/engagement/engagement.routes.js';
+import { workforceRouter } from '../modules/workforce/workforce.routes.js';
+import { workflowsRouter } from '../modules/workflows/workflows.routes.js';
 
 /**
  * /api/v1 route map.
@@ -40,6 +49,7 @@ export function apiRouter() {
   r.use(resolveHostTenant);
   r.use('/auth', tenantAuthRouter);
   r.use('/verify', letterVerifyRouter); // public check of an issued HR letter, on the company's own address
+  r.use('/careers', careersRouter); // public job listings and applications, on the company's own address
 
   // Billing and support stay writable when the workspace is read-only, so customers can always pay and get help.
   const recovery = [authenticateTenant, subscriptionGuard({ allowWhenReadOnly: true })];
@@ -63,6 +73,15 @@ export function apiRouter() {
   tenant.use('/performance', performanceRouter);
   tenant.use('/expenses', expensesRouter);
   tenant.use('/letters', lettersRouter);
+  tenant.use('/assets', assetsRouter);
+  tenant.use('/onboarding', onboardingRouter);
+  tenant.use('/recruitment', recruitmentRouter);
+  tenant.use('/helpdesk', helpdeskRouter);
+  tenant.use('/training', trainingRouter);
+  tenant.use('/appraisals', appraisalsRouter);
+  tenant.use('/engagement', engagementRouter);
+  tenant.use('/workforce', workforceRouter);
+  tenant.use('/workflows', workflowsRouter);
   tenant.use('/', workspaceRouter); // /dashboard, /announcements, /notifications, /settings
   r.use(tenant);
 

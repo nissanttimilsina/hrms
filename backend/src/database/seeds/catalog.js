@@ -48,7 +48,8 @@ const BASIC = ['attendance', 'leave'];
 const PROFESSIONAL = [...BASIC, 'payroll', 'shifts', 'biometric', 'recruitment', 'expenses', 'performance',
   'reports_advanced', 'document_expiry_alerts', 'workflows', 'onboarding'];
 const BUSINESS = [...PROFESSIONAL, 'payroll_advanced', 'kpi_appraisal', 'training', 'assets',
-  'analytics_advanced', 'multi_branch', 'custom_fields', 'workflows_advanced', 'api_integrations', 'helpdesk'];
+  'analytics_advanced', 'multi_branch', 'custom_fields', 'workflows_advanced', 'api_integrations', 'helpdesk',
+  'engagement', 'workforce_planning'];
 const ENTERPRISE = FEATURES.filter((f) => !f[3]).map((f) => f[0]);
 
 export const PLANS = [
@@ -102,9 +103,21 @@ export const RESOURCES = {
   projects: { module: 'tasks', actions: ['view', 'create', 'edit', 'delete'] },
   // HR letters (employment, salary, experience…). approve = issue or reject; configure = letterhead.
   letters: { module: 'ess', actions: ['view', 'create', 'approve', 'configure'] },
+  // Onboarding and offboarding journeys (scope = whose journey). edit = tick off tasks; manage = start/complete/cancel.
+  onboarding: { module: 'onboarding', actions: ['view', 'edit', 'manage', 'configure'] },
+  // HR helpdesk. create = raise a ticket; manage = work tickets (reply, assign, internal notes); configure = categories.
+  helpdesk: { module: 'helpdesk', actions: ['view', 'create', 'manage', 'configure', 'export'] },
+  // Goals and appraisals. edit = goals and reviews; approve = finalise/calibrate; configure = cycles.
+  appraisals: { module: 'kpi_appraisal', actions: ['view', 'create', 'edit', 'approve', 'configure', 'export'] },
+  // Surveys and recognition. view = take surveys, see recognition; create = give recognition; manage = surveys and results.
+  engagement: { module: 'engagement', actions: ['view', 'create', 'manage'] },
+  // Headcount plans and plan-versus-actual.
+  workforce: { module: 'workforce_planning', actions: ['view', 'edit', 'approve'] },
+  // Requests made through custom workflows (forms set up under workflows:configure).
+  requests: { module: 'workflows', actions: ['view', 'create', 'export'] },
 };
 // Permissions that are not about records, so data scope does not apply.
-const UNSCOPED = new Set(['users', 'roles', 'settings', 'subscription', 'audit', 'workflows', 'support', 'holidays', 'announcements', 'projects']);
+const UNSCOPED = new Set(['users', 'roles', 'settings', 'subscription', 'audit', 'workflows', 'support', 'holidays', 'announcements', 'projects', 'workforce']);
 
 export const PERMISSIONS = Object.entries(RESOURCES).flatMap(([resource, { module, actions }]) =>
   actions.map((action) => ({
@@ -125,7 +138,8 @@ export const DEFAULT_ROLES = [
   { key: 'company_admin', name: 'Company Administrator', grants: every('COMPANY') },
   { key: 'hr_manager', name: 'HR Manager', grants: [
     ...r(['branches', 'departments', 'employees', 'documents', 'attendance', 'leave', 'shifts', 'recruitment',
-      'performance', 'training', 'assets', 'reports', 'holidays', 'announcements', 'devices', 'tasks', 'work_reports', 'projects', 'letters'], '*', 'COMPANY'),
+      'performance', 'training', 'assets', 'reports', 'holidays', 'announcements', 'devices', 'tasks', 'work_reports', 'projects', 'letters',
+      'onboarding', 'helpdesk', 'appraisals', 'engagement', 'workforce', 'workflows', 'requests'], '*', 'COMPANY'),
     ...r(['users', 'roles'], ['view'], 'COMPANY'),
     ...r(['support'], ['view', 'create'], 'COMPANY'),
   ] },
@@ -136,6 +150,12 @@ export const DEFAULT_ROLES = [
     ...r(['recruitment'], ['view', 'create', 'edit'], 'COMPANY'),
     ...r(['branches', 'departments'], ['view'], 'COMPANY'),
     ...r(['letters'], ['view', 'approve'], 'COMPANY'),
+    ...r(['onboarding'], ['view', 'edit', 'manage'], 'COMPANY'),
+    ...r(['helpdesk'], ['view', 'manage'], 'COMPANY'),
+    ...r(['assets'], ['view'], 'COMPANY'),
+    ...r(['training'], ['view', 'create', 'edit'], 'COMPANY'),
+    ...r(['engagement'], ['view', 'create'], 'COMPANY'),
+    ...r(['requests'], ['view', 'create'], 'OWN'),
   ] },
   { key: 'payroll_manager', name: 'Payroll Manager', grants: [
     ...r(['holidays', 'announcements'], ['view'], 'COMPANY'),
@@ -157,6 +177,12 @@ export const DEFAULT_ROLES = [
     ...r(['employees'], ['view'], 'DEPARTMENT'),
     ...r(['attendance', 'leave', 'expenses'], ['view', 'approve', 'reject'], 'DEPARTMENT'),
     ...r(['performance'], ['view', 'edit', 'approve'], 'DEPARTMENT'),
+    ...r(['assets', 'onboarding'], ['view'], 'DEPARTMENT'),
+    ...r(['onboarding'], ['edit'], 'DEPARTMENT'),
+    ...r(['training'], ['view', 'create', 'approve'], 'DEPARTMENT'),
+    ...r(['appraisals'], ['view', 'create', 'edit'], 'DEPARTMENT'),
+    ...r(['requests'], ['view'], 'DEPARTMENT'),
+    ...r(['workforce'], ['view'], 'COMPANY'),
     ...r(['reports'], ['view'], 'DEPARTMENT'),
     ...r(['tasks'], '*', 'DEPARTMENT'),
     ...r(['work_reports'], ['view', 'approve', 'export'], 'DEPARTMENT'),
@@ -167,6 +193,12 @@ export const DEFAULT_ROLES = [
     ...r(['employees'], ['view'], 'BRANCH'),
     ...r(['attendance', 'leave', 'shifts', 'expenses'], ['view', 'approve', 'reject'], 'BRANCH'),
     ...r(['performance'], ['view', 'edit', 'approve'], 'BRANCH'),
+    ...r(['assets', 'onboarding'], ['view'], 'BRANCH'),
+    ...r(['onboarding'], ['edit'], 'BRANCH'),
+    ...r(['training'], ['view', 'create', 'approve'], 'BRANCH'),
+    ...r(['appraisals'], ['view', 'create', 'edit'], 'BRANCH'),
+    ...r(['requests'], ['view'], 'BRANCH'),
+    ...r(['workforce'], ['view'], 'COMPANY'),
     ...r(['reports'], ['view'], 'BRANCH'),
     ...r(['tasks'], '*', 'BRANCH'),
     ...r(['work_reports'], ['view', 'approve', 'export'], 'BRANCH'),
@@ -178,6 +210,11 @@ export const DEFAULT_ROLES = [
     ...r(['attendance', 'leave'], ['view', 'approve', 'reject'], 'DIRECT_REPORTS'),
     ...r(['performance'], ['view', 'edit'], 'DIRECT_REPORTS'),
     ...r(['expenses'], ['view', 'approve', 'reject'], 'DIRECT_REPORTS'),
+    ...r(['assets', 'onboarding'], ['view'], 'DIRECT_REPORTS'),
+    ...r(['onboarding'], ['edit'], 'DIRECT_REPORTS'),
+    ...r(['training'], ['view', 'create', 'approve'], 'DIRECT_REPORTS'),
+    ...r(['appraisals'], ['view', 'create', 'edit'], 'DIRECT_REPORTS'),
+    ...r(['requests'], ['view'], 'DIRECT_REPORTS'),
     ...r(['tasks'], ['view', 'create', 'edit', 'delete'], 'DIRECT_REPORTS'),
     ...r(['work_reports'], ['view', 'approve'], 'DIRECT_REPORTS'),
     ...r(['projects'], ['view', 'create'], 'COMPANY'),
@@ -197,6 +234,13 @@ export const DEFAULT_ROLES = [
     ...r(['work_reports'], ['view', 'create'], 'OWN'),
     ...r(['projects'], ['view'], 'COMPANY'),
     ...r(['letters'], ['view', 'create'], 'OWN'),
+    ...r(['assets', 'onboarding'], ['view'], 'OWN'),
+    ...r(['onboarding'], ['edit'], 'OWN'),
+    ...r(['helpdesk'], ['view', 'create'], 'OWN'),
+    ...r(['training'], ['view', 'create'], 'OWN'),
+    ...r(['appraisals'], ['view', 'edit'], 'OWN'),
+    ...r(['engagement'], ['view', 'create'], 'COMPANY'),
+    ...r(['requests'], ['view', 'create'], 'OWN'),
   ] },
   { key: 'auditor', name: 'Auditor', grants: [
     ...r(Object.keys(RESOURCES), ['view', 'export'], 'COMPANY'),

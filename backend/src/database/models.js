@@ -344,6 +344,116 @@ export function defineModels(sequelize) {
   LetterRequest.belongsTo(Employee, { foreignKey: 'employeeId', as: 'employee' });
   LetterRequest.belongsTo(User, { foreignKey: 'decidedBy', as: 'decider' });
 
+  // ---------------------------------------------------------------- talent and operations (014)
+  const DATE = DataTypes.DATEONLY;
+  const R = DataTypes.DECIMAL(3, 2);
+  const UA = DataTypes.ARRAY(DataTypes.UUID);
+  const Asset = sequelize.define('Asset', {
+    id, tenantId, number: I, name: S, category: S, assetTag: S, serialNo: S, brandModel: S, branchId: U, purchaseDate: DATE, purchaseCost: M,
+    vendor: S, warrantyUntil: DATE, condition: S, status: S, assignedEmployeeId: U, assignedAt: D, dueBackOn: DATE, notes: T, createdBy: U,
+  }, opts('assets'));
+  const AssetEvent = sequelize.define('AssetEvent', { id, tenantId, assetId: U, type: S, employeeId: U, condition: S, note: T, authorId: U }, createdOnly('asset_events'));
+  const ChecklistTemplate = sequelize.define('ChecklistTemplate', { id, tenantId, kind: S, name: S, description: T, items: J, isDefault: B, active: B }, opts('checklist_templates'));
+  const Journey = sequelize.define('Journey', {
+    id, tenantId, number: I, kind: S, employeeId: U, templateId: U, status: S, startDate: DATE, exitType: S, noticeDate: DATE, lastWorkingDay: DATE,
+    exitReason: T, rehireEligible: B, exitInterview: J, terminateEmployee: B, completedAt: D, completedBy: U, createdBy: U,
+  }, opts('journeys'));
+  const JourneyTask = sequelize.define('JourneyTask', { id, tenantId, journeyId: U, sort: I, title: S, description: T, owner: S, dueDate: DATE, doneAt: D, doneBy: U, note: T }, opts('journey_tasks'));
+  const JobOpening = sequelize.define('JobOpening', {
+    id, tenantId, number: I, slug: S, title: S, departmentId: U, branchId: U, designationId: U, employmentType: S, location: S, positions: I,
+    description: T, requirements: T, salaryMin: M, salaryMax: M, showSalary: B, status: S, published: B, closesOn: DATE, hiringManagerId: U,
+    createdBy: U, openedAt: D, closedAt: D,
+  }, opts('job_openings'));
+  const Candidate = sequelize.define('Candidate', {
+    id, tenantId, number: I, jobId: U, firstName: S, lastName: S, email: S, phone: S, currentTitle: S, experienceYears: DataTypes.DECIMAL(4, 1),
+    expectedSalary: M, noticeDays: I, source: S, referredBy: U, coverNote: T, cvFileId: U, stage: S, rating: I, offer: J, rejectReason: T,
+    employeeId: U, consentAt: D, stageChangedAt: D, createdBy: U,
+  }, opts('candidates'));
+  const CandidateEvent = sequelize.define('CandidateEvent', { id, tenantId, candidateId: U, type: S, data: J, authorId: U }, createdOnly('candidate_events'));
+  const Interview = sequelize.define('Interview', {
+    id, tenantId, candidateId: U, round: S, scheduledAt: D, durationMinutes: I, mode: S, location: S, interviewerIds: UA, status: S, createdBy: U,
+  }, opts('interviews'));
+  const InterviewFeedback = sequelize.define('InterviewFeedback', { id, tenantId, interviewId: U, authorId: U, rating: I, recommendation: S, scores: J, notes: T }, opts('interview_feedback'));
+  const HrTicket = sequelize.define('HrTicket', {
+    id, tenantId, number: I, employeeId: U, requesterId: U, category: S, subject: S, priority: S, status: S, confidential: B, assigneeId: U,
+    dueAt: D, firstResponseAt: D, resolvedAt: D, closedAt: D, satisfaction: I, satisfactionNote: T,
+  }, opts('hr_tickets'));
+  const HrTicketMessage = sequelize.define('HrTicketMessage', { id, tenantId, ticketId: U, authorId: U, body: T, internal: B, attachmentFileId: U }, createdOnly('hr_ticket_messages'));
+  const TrainingCourse = sequelize.define('TrainingCourse', {
+    id, tenantId, title: S, category: S, description: T, delivery: S, provider: S, durationHours: DataTypes.DECIMAL(6, 1), costPerPerson: M,
+    certificateValidMonths: I, mandatory: B, selfEnroll: B, active: B,
+  }, opts('training_courses'));
+  const TrainingSession = sequelize.define('TrainingSession', { id, tenantId, courseId: U, startsAt: D, endsAt: D, location: S, trainer: S, capacity: I, status: S }, opts('training_sessions'));
+  const TrainingEnrollment = sequelize.define('TrainingEnrollment', {
+    id, tenantId, courseId: U, sessionId: U, employeeId: U, status: S, requestedBy: U, requestNote: T, decidedBy: U, decisionNote: T,
+    completedOn: DATE, score: DataTypes.DECIMAL(5, 1), certificateExpiresOn: DATE, certificateFileId: U, feedbackRating: I, feedbackComment: T,
+  }, opts('training_enrollments'));
+  const AppraisalCycle = sequelize.define('AppraisalCycle', {
+    id, tenantId, name: S, periodStart: DATE, periodEnd: DATE, selfReviewDue: DATE, managerReviewDue: DATE, status: S, competencies: J,
+    goalWeight: I, peerFeedback: B, createdBy: U, launchedAt: D, closedAt: D,
+  }, opts('appraisal_cycles'));
+  const Goal = sequelize.define('Goal', {
+    id, tenantId, employeeId: U, cycleId: U, title: S, description: T, measure: S, target: S, actual: S, weight: I, progress: I, dueDate: DATE, status: S, createdBy: U,
+  }, opts('goals'));
+  const Appraisal = sequelize.define('Appraisal', {
+    id, tenantId, cycleId: U, employeeId: U, reviewerId: U, status: S, selfReview: J, managerReview: J, goalScore: R, competencyScore: R,
+    calculatedRating: R, finalRating: R, calibrationNote: T, recommendation: S, workScore: I, selfSubmittedAt: D, managerSubmittedAt: D,
+    finalizedAt: D, finalizedBy: U, acknowledgedAt: D, employeeComment: T,
+  }, opts('appraisals'));
+  const AppraisalFeedback = sequelize.define('AppraisalFeedback', {
+    id, tenantId, appraisalId: U, fromEmployeeId: U, requestedBy: U, rating: I, strengths: T, improvements: T, submittedAt: D,
+  }, createdOnly('appraisal_feedback'));
+  const Survey = sequelize.define('Survey', {
+    id, tenantId, title: S, description: T, anonymous: B, status: S, closesOn: DATE, audience: J, questions: J, minGroup: I, createdBy: U, openedAt: D, closedAt: D,
+  }, opts('surveys'));
+  const SurveyParticipant = sequelize.define('SurveyParticipant', {
+    tenantId, surveyId: { type: U, primaryKey: true }, employeeId: { type: U, primaryKey: true }, responded: B,
+  }, noTs('survey_participants'));
+  const SurveyResponse = sequelize.define('SurveyResponse', { id, tenantId, surveyId: U, employeeId: U, departmentId: U, answers: J, submittedOn: DATE }, noTs('survey_responses'));
+  const Kudos = sequelize.define('Kudos', { id, tenantId, fromEmployeeId: U, toEmployeeId: U, value: S, message: T, hiddenAt: D, hiddenBy: U }, createdOnly('kudos'));
+  const HeadcountPlan = sequelize.define('HeadcountPlan', { id, tenantId, name: S, fiscalYear: S, status: S, notes: T, approvedBy: U, approvedAt: D, createdBy: U }, opts('headcount_plans'));
+  const HeadcountPlanLine = sequelize.define('HeadcountPlanLine', {
+    id, tenantId, planId: U, departmentId: U, designationId: U, branchId: U, planned: I, monthlyCost: M, neededBy: DATE, note: T,
+  }, noTs('headcount_plan_lines'));
+  const WorkflowDefinition = sequelize.define('WorkflowDefinition', { id, tenantId, name: S, description: T, icon: S, fields: J, steps: J, active: B, createdBy: U }, opts('workflow_definitions'));
+  const WorkflowRequest = sequelize.define('WorkflowRequest', {
+    id, tenantId, number: I, definitionId: U, snapshot: J, employeeId: U, requesterId: U, data: J, status: S, currentStep: I, decidedAt: D,
+  }, opts('workflow_requests'));
+  const WorkflowRequestStep = sequelize.define('WorkflowRequestStep', {
+    id, tenantId, requestId: U, stepIndex: I, name: S, approverIds: UA, status: S, decidedBy: U, decidedAt: D, note: T,
+  }, noTs('workflow_request_steps'));
+
+  Asset.belongsTo(Employee, { foreignKey: 'assignedEmployeeId', as: 'holder' });
+  Asset.belongsTo(Branch, { foreignKey: 'branchId', as: 'branch' });
+  Asset.hasMany(AssetEvent, { foreignKey: 'assetId', as: 'events' });
+  AssetEvent.belongsTo(Employee, { foreignKey: 'employeeId', as: 'employee' });
+  AssetEvent.belongsTo(User, { foreignKey: 'authorId', as: 'author' });
+  Journey.belongsTo(Employee, { foreignKey: 'employeeId', as: 'employee' });
+  Journey.hasMany(JourneyTask, { foreignKey: 'journeyId', as: 'tasks' });
+  JobOpening.belongsTo(Department, { foreignKey: 'departmentId', as: 'department' });
+  JobOpening.belongsTo(Branch, { foreignKey: 'branchId', as: 'branch' });
+  JobOpening.belongsTo(Designation, { foreignKey: 'designationId', as: 'designation' });
+  JobOpening.belongsTo(Employee, { foreignKey: 'hiringManagerId', as: 'hiringManager' });
+  Candidate.belongsTo(JobOpening, { foreignKey: 'jobId', as: 'job' });
+  Interview.belongsTo(Candidate, { foreignKey: 'candidateId', as: 'candidate' });
+  Interview.hasMany(InterviewFeedback, { foreignKey: 'interviewId', as: 'feedback' });
+  HrTicket.belongsTo(Employee, { foreignKey: 'employeeId', as: 'employee' });
+  HrTicket.hasMany(HrTicketMessage, { foreignKey: 'ticketId', as: 'messages' });
+  TrainingSession.belongsTo(TrainingCourse, { foreignKey: 'courseId', as: 'course' });
+  TrainingEnrollment.belongsTo(TrainingCourse, { foreignKey: 'courseId', as: 'course' });
+  TrainingEnrollment.belongsTo(TrainingSession, { foreignKey: 'sessionId', as: 'session' });
+  TrainingEnrollment.belongsTo(Employee, { foreignKey: 'employeeId', as: 'employee' });
+  Goal.belongsTo(Employee, { foreignKey: 'employeeId', as: 'employee' });
+  Appraisal.belongsTo(AppraisalCycle, { foreignKey: 'cycleId', as: 'cycle' });
+  Appraisal.belongsTo(Employee, { foreignKey: 'employeeId', as: 'employee' });
+  Appraisal.belongsTo(Employee, { foreignKey: 'reviewerId', as: 'reviewer' });
+  AppraisalFeedback.belongsTo(Employee, { foreignKey: 'fromEmployeeId', as: 'from' });
+  Kudos.belongsTo(Employee, { foreignKey: 'fromEmployeeId', as: 'from' });
+  Kudos.belongsTo(Employee, { foreignKey: 'toEmployeeId', as: 'to' });
+  HeadcountPlan.hasMany(HeadcountPlanLine, { foreignKey: 'planId', as: 'lines' });
+  WorkflowRequest.belongsTo(Employee, { foreignKey: 'employeeId', as: 'employee' });
+  WorkflowRequest.hasMany(WorkflowRequestStep, { foreignKey: 'requestId', as: 'steps' });
+
   PlanEntitlement.belongsTo(FeatureCatalog, { foreignKey: 'featureId', as: 'feature' });
   Subscription.belongsTo(Plan, { foreignKey: 'planId', as: 'plan' });
   Subscription.hasMany(SubscriptionItem, { foreignKey: 'subscriptionId', as: 'items' });
@@ -363,6 +473,9 @@ export function defineModels(sequelize) {
 
   return {
     Project, Task, TaskActivity, WorkReport, WorkReportItem, ExpenseClaim, LetterRequest,
+    Asset, AssetEvent, ChecklistTemplate, Journey, JourneyTask, JobOpening, Candidate, CandidateEvent, Interview, InterviewFeedback,
+    HrTicket, HrTicketMessage, TrainingCourse, TrainingSession, TrainingEnrollment, AppraisalCycle, Goal, Appraisal, AppraisalFeedback,
+    Survey, SurveyParticipant, SurveyResponse, Kudos, HeadcountPlan, HeadcountPlanLine, WorkflowDefinition, WorkflowRequest, WorkflowRequestStep,
     SubscriptionRequest, TenantFeatureOverride, EmployeeLoan, AttendanceDevice, DevicePunch, DeviceLog,
     TaxRuleSet, SalaryComponent, EmployeeSalary, PayrollRun, PayrollItem, PayrollAdjustment,
     Designation, Shift, EmployeeHistory, File, AttendanceRecord, AttendanceCorrection, Holiday, LeaveType, LeaveTransaction,

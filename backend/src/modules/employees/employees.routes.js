@@ -77,7 +77,7 @@ async function nextEmployeeCode(tenantId, t) {
 
 const history = (t, req, employeeId, type, effectiveOn, from, to, note) => app.EmployeeHistory.create({ tenantId: req.auth.tenantId, employeeId, type, effectiveOn, fromValue: from, toValue: to, note, actorId: req.auth.userId }, { transaction: t });
 
-async function createEmployee(req, t, data) {
+export async function createEmployee(req, t, data) {
   if (data.status !== 'TERMINATED') await assertWithinLimit(req.auth.ctx, 'employees', t);
   const employeeCode = data.employeeCode ?? (await nextEmployeeCode(req.auth.tenantId, t));
   if (data.managerId && !(await app.Employee.count({ where: { id: data.managerId }, transaction: t }))) throw BadRequest('Reporting manager not found', [{ path: 'managerId', message: 'Not found' }]);
@@ -188,6 +188,18 @@ employeesRouter.patch('/:id', requirePermission('employees:edit'), validate({ ..
     return ok(res, presentEmployee(emp, true));
   }));
 
+/** Mark an employee as exited (also used when an offboarding journey completes). */
+export async function terminateEmployee(req, t, e, { exitedOn, reason, note }) {
+  if (e.status === 'TERMINATED') throw Conflict('Employee has already exited');
+  if (exitedOn < e.joinedOn) throw BadRequest('Exit date is before the joining date');
+  const before = { status: e.status };
+  await e.update({ status: 'TERMINATED', exitedOn }, { transaction: t });
+  await history(t, req, e.id, 'TERMINATION', exitedOn, before, { status: 'TERMINATED', reason }, note);
+  await app.User.update({ status: 'DISABLED' }, { where: { employeeId: e.id }, transaction: t });
+  await audit({ transaction: t, tenantId: req.auth.tenantId, actor: tenantActor(req), action: 'employee.terminate', entityType: 'employee', entityId: e.id, after: { exitedOn, reason, note }, req });
+  return e;
+}
+
 /** Termination / resignation: sets exit date, frees the seat, disables login. History is preserved. */
 employeesRouter.post('/:id/terminate', requirePermission('employees:manage'), validate({
   ...idParam, body: z.object({ exitedOn: z.string().date(), reason: z.enum(['RESIGNATION', 'TERMINATION', 'RETIREMENT', 'CONTRACT_END', 'DEATH', 'OTHER']), note: z.string().max(1000).optional() }).strict(),
@@ -195,14 +207,7 @@ employeesRouter.post('/:id/terminate', requirePermission('employees:manage'), va
   const emp = await req.tx(async (t) => {
     const e = await app.Employee.findByPk(req.params.id, { transaction: t, lock: t.LOCK.UPDATE });
     if (!e || !recordInScope(req.scopes, req.auth.principal, e)) throw NotFound('Employee');
-    if (e.status === 'TERMINATED') throw Conflict('Employee has already exited');
-    if (req.body.exitedOn < e.joinedOn) throw BadRequest('Exit date is before the joining date');
-    const before = { status: e.status };
-    await e.update({ status: 'TERMINATED', exitedOn: req.body.exitedOn }, { transaction: t });
-    await history(t, req, e.id, 'TERMINATION', req.body.exitedOn, before, { status: 'TERMINATED', reason: req.body.reason }, req.body.note);
-    await app.User.update({ status: 'DISABLED' }, { where: { employeeId: e.id }, transaction: t });
-    await audit({ transaction: t, tenantId: req.auth.tenantId, actor: tenantActor(req), action: 'employee.terminate', entityType: 'employee', entityId: e.id, after: req.body, req });
-    return e;
+    return terminateEmployee(req, t, e, req.body);
   });
   return ok(res, presentEmployee(emp, true));
 }));
