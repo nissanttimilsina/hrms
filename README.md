@@ -1,6 +1,7 @@
 # Lishnu Tech HRMS Platform
 
 Multi-tenant HRMS SaaS: marketing website, Super Admin portal and company HRMS application.
+**New Claude session? Start with [`CLAUDE.md`](CLAUDE.md) and [`documentation/HANDOVER.md`](documentation/HANDOVER.md).**
 **Status: release candidate.** What ships, how it was verified and known limitations: [`documentation/PROGRESS.md`](documentation/PROGRESS.md).
 **Deploying to a server:** [`documentation/deployment/vps-deployment.md`](documentation/deployment/vps-deployment.md).
 
@@ -12,11 +13,11 @@ hrms-platform/
 │   │   ├── database/        migrations/*.sql (source of truth), models, migrate runner, seeds
 │   │   ├── middleware/      tenant resolution, auth, subscription guard, RBAC, errors, rate limits
 │   │   ├── modules/         public · auth · admin · billing · support · organization · employees ·
-│   │   │                    attendance · devices (biometric /iclock) · leave · payroll · reports · workspace
+│   │   │                    attendance · devices (biometric /iclock) · leave · payroll · reports · work (tasks, daily reports, performance) · workspace
 │   │   ├── services/        auth · rbac · subscription · billing · payments · email · storage · hr/*
 │   │   ├── jobs/            queues + worker (lifecycle, renewals, reconciliation, reminders, email)
 │   │   └── routes/          /api/v1 route map
-│   └── tests/               node:test + supertest (195 tests)
+│   └── tests/               node:test + supertest (208 tests)
 ├── frontend/                npm workspaces
 │   ├── shared-ui/           design system + API client + app kit
 │   ├── marketing/           public website (prerendered at build time)
