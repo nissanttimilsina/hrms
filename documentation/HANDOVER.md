@@ -75,9 +75,9 @@ The deploy builds the images, runs `migrate` (SQL migrations, then `seeds/run.js
 - **Email works.** It is sent through Brevo SMTP from `no-reply@lishnutech.com`; the domain is authenticated with DKIM and DMARC. Brevo's "Authorized IPs" list includes `163.61.41.51`. To test: `docker compose exec api node src/scripts/send-test-email.js you@example.com`, run in `/opt/hrms/infrastructure/docker`.
 - **Super Admin password reset:** `docker compose exec api node src/scripts/reset-platform-password.js <email>`, optionally with `NEW_PASSWORD=...` set.
 
-**Stage 1 of employee self-service (§12a)** is on branch `stage-1-self-service` (pull request #1), not yet in `main`. The session that wrote it could not install npm packages, so it used GitHub CI on the pull request: all 222 backend tests pass (208 existing + 14 new) and the frontend build passes. The new pages have **not** been checked in a browser yet. The next session should do that at desktop size and 390 px, fix anything it finds, then merge into `main` and give the owner deploy commands.
+**Stage 1 of employee self-service (§12a)** is merged into `main` (pull request #1). All 222 backend tests pass and the frontend build passes. The pages were checked in Chrome at desktop size and 390 px through the `UI check` workflow (see §15). That check led to: compact phone rows for tables (`DataTable` prop `mobile(row)`), a fix for a page-wide overflow on Letter requests, names kept capitalised in "Waiting for …", and error states on My tax and My letters. The owner still needs to deploy it.
 
-**CI notes:** the nginx check failed on `main` because CI did not pass `REAL_IP_FROM`; the branch fixes that. The CI "Backup & restore drill" step also fails on `main` and on the branch: the runner's newer `pg_dump` writes `SET transaction_timeout`, which the PostgreSQL 16 service rejects. Production is not affected, because the server's backup and restore scripts run the tools inside the PostgreSQL 16 container. Fix it in CI by using version-16 client tools.
+**CI notes:** the nginx check failed on `main` because CI did not pass `REAL_IP_FROM`; the branch fixes that. The CI "Backup & restore drill" step used to fail because the runner's newer `pg_dump` writes `SET transaction_timeout`; CI now runs `pg_dump`, `pg_restore` and `psql` from the `postgres:16` image. Production was never affected.
 
 **Previously delivered:** the work-management module (§12). He was given deploy steps and setup advice: set each employee's Reporting manager, and give managers the Team Leader or Department Manager role. No reply on that yet.
 
@@ -503,6 +503,7 @@ These notes describe the cloud workspace earlier sessions used. A new session ma
 - **Preview ports:** after building, `npx vite preview --port 4173` serves marketing, 4174 admin and 4175 company-app.
 - **Marketing build:** `VITE_ROOT_DOMAIN=hrms.lishnutech.com VITE_SITE_URL=https://hrms.lishnutech.com npm run build` in `frontend/marketing`. It should print "prerendered 53 routes".
 - **Builds and tests:** `cd frontend && npm run build` builds all three apps; `cd backend && npm test` runs all tests. Tests use a separate test database and reset it.
+- **No package installs?** Use the `UI check` workflow on a pull request: it seeds a "demo" workspace (`backend/tests/ui/fixtures.js`; logins `sita@`, `ram@`, `finance@`, `hr@demo.test`, password `Str0ngPassw0rd!`), screenshots the pages with `infrastructure/ci/ui-screens.mjs`, reports console errors, failed API calls and horizontal overflow, and prints phone screenshots into the job log between `BEGIN-FILE`/`END-FILE` lines. Add pages to `PAGES` in that script.
 - **Browser checks:** Playwright with `executable_path='/usr/bin/google-chrome'`. The pattern is to log in, click through, take screenshots, check console errors, and confirm `document.documentElement.scrollWidth <= 390` on a phone-sized viewport.
 
 ## 16. Coding conventions
@@ -528,6 +529,7 @@ These notes describe the cloud workspace earlier sessions used. A new session ma
   - `useAction(fn, { success, invalidate, onDone })` for changes.
   - `FormDialog` for forms. Fields support `section`, `sectionHint`, `span`, `create: {label, onCreate}` (inline "+ New") and `emptyHint`. Date fields come back as ISO strings, so `.slice(0,10)` them.
   - `PageHeader`, `DataTable`, `EmptyState`, `ConfirmDialog`, `Dialog`, `useToast()`.
+  - `DataTable` takes `mobile={(row) => …}` for a stacked layout below 640 px. Use it for any list whose key columns (amount, status, actions) would be clipped on a phone.
 - **API client:** `api.get`, `api.post`, `api.patch`, `api.put`, **`api.del`** (not `api.delete`), and `api.list` (returns `{data, meta}`).
 - **Colours:** use only theme colour tokens that exist (`ink-400/500/700/900`, `brand-50…700`, `success-50/600/700`, `warning-50/600/700`, `danger-50/600/700`, `line`, `line-strong`, `subtle`, `canvas`). Tokens such as `ink-300`, `ink-600` and `warning-500` do not exist and render as nothing.
 - **Class merging:** `cn()` is clsx, **not** tailwind-merge, so conflicting classes (`w-full` with `w-44`) do not override. Wrap the element, or avoid the conflict.
@@ -574,7 +576,7 @@ These notes describe the cloud workspace earlier sessions used. A new session ma
 - Tax slabs and SSF rates must be checked every Shrawan.
 
 **Stage 1 follow-ups:**
-- Check the stage 1 pages in a browser at desktop size and 390 px, merge pull request #1 into `main`, then deploy.
+- Deploy `main` (stage 1 is merged).
 - After deploy, the owner should fill in the letterhead (Letter requests → Letterhead) and review expense categories and limits (Expense claims → Categories and rules).
 - Existing companies' Team Leader roles do not get expense approval automatically (see §12a).
 
