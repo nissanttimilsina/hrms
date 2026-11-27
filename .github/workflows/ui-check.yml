@@ -1,0 +1,93 @@
+name: UI check
+
+# Runs the company app against a real API with demo data, opens the employee self-service pages
+# in Chrome at desktop size and at 390 px, and uploads the screenshots and a report.
+on:
+  pull_request:
+    paths: ['frontend/**', 'backend/src/**', 'backend/tests/ui/**', 'infrastructure/ci/**', '.github/workflows/ui-check.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: ui-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  screens:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-retries 20
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: --health-cmd "redis-cli ping" --health-interval 5s --health-retries 20
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      NODE_ENV: test
+      PORT: 4000
+      DATABASE_URL_OWNER: postgresql://hrms_owner:owner_pw@localhost:5432/hrms_ui
+      DATABASE_URL_APP: postgresql://hrms_app:app_pw@localhost:5432/hrms_ui
+      DATABASE_URL_SYSTEM: postgresql://hrms_system:system_pw@localhost:5432/hrms_ui
+      DB_SSL: disable
+      REDIS_URL: redis://localhost:6379/2
+      JWT_ACCESS_SECRET: ui-check-secret-ui-check-secret-0123456789
+      ROOT_DOMAIN: hrms.test
+      COOKIE_SECURE: "false"
+      TRUST_PROXY: "0"
+      EMAIL_TRANSPORT: log
+      STORAGE_DRIVER: local
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - name: Database roles
+        run: HRMS_DB=hrms_ui HRMS_OWNER_PASSWORD=owner_pw HRMS_APP_PASSWORD=app_pw HRMS_SYSTEM_PASSWORD=system_pw ./infrastructure/docker/postgres/00-roles.sh
+      - name: Backend install, migrate, seed, demo data
+        working-directory: backend
+        run: |
+          npm ci
+          node src/database/migrate.js
+          node src/database/seeds/run.js
+          node tests/ui/fixtures.js /tmp/ui-fixtures.json
+      - name: Start API
+        working-directory: backend
+        run: |
+          nohup node src/server.js > /tmp/api.log 2>&1 &
+          for i in $(seq 1 30); do curl -sf -H "Host: demo.hrms.test" localhost:4000/health/live >/dev/null && break; sleep 1; done
+      - name: Build and serve the company app
+        working-directory: frontend
+        env:
+          VITE_DEV_TENANT_HOST: demo.hrms.test
+        run: |
+          npm ci
+          npm run build -w company-app
+          cd company-app && (nohup npx vite preview --port 4175 --strictPort > /tmp/web.log 2>&1 &)
+          for i in $(seq 1 30); do curl -sf localhost:4175/ >/dev/null && break; sleep 1; done
+      - name: Screenshots
+        run: |
+          npm i --prefix /tmp/pw --no-save --no-audit --no-fund playwright-core@1
+          node infrastructure/ci/ui-screens.mjs /tmp/pw /tmp/ui-fixtures.json /tmp/screens
+      - name: Logs
+        if: always()
+        run: tail -n 80 /tmp/api.log || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ui-screens
+          path: /tmp/screens
+          retention-days: 7
