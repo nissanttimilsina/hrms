@@ -54,13 +54,13 @@ function RequestDialog({ open, onClose }) {
 
 export function MyLetters() {
   const [open, setOpen] = useState(false);
-  const { data, isPending } = useQuery({ queryKey: ['my-letters'], queryFn: () => api.get('/letters?view=mine') });
+  const { data, isPending, error } = useQuery({ queryKey: ['my-letters'], queryFn: () => api.get('/letters?view=mine') });
   const cancel = useAction((id) => api.post(`/letters/${id}/cancel`, {}), { success: 'Request cancelled', invalidate: [['my-letters']] });
   const download = useDownload();
   return (
     <>
       <PageHeader title="My letters" description="Employment, salary and experience letters from HR, ready to download." actions={<Button onClick={() => setOpen(true)}><FileSignature className="size-4" />Request a letter</Button>} />
-      {isPending ? <Skeleton className="h-48" /> : !data.length ? (
+      {isPending ? <Skeleton className="h-48" /> : error ? <Card><EmptyState icon={<FileText className="size-5" />} title="Could not load your letters" description={error.message} /></Card> : !data.length ? (
         <Card><EmptyState icon={<FileText className="size-5" />} title="No letters yet" description="Need proof of employment or salary for a bank, embassy or new job? Request it here instead of emailing HR." action={<Button onClick={() => setOpen(true)}>Request a letter</Button>} /></Card>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 [&>*]:min-w-0">

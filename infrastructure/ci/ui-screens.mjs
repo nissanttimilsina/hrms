@@ -54,7 +54,8 @@ for (const [vpName, viewport] of Object.entries(VIEWPORTS)) {
       await p.getByLabel('Email').fill(`${user}@demo.test`);
       await p.getByLabel('Password').fill(fx.password);
       await p.getByRole('button', { name: 'Sign in' }).click();
-      await p.waitForSelector('nav, aside', { timeout: 15000 });
+      await p.waitForFunction(() => !document.querySelector('input[type=password]'), null, { timeout: 15000 });
+      await p.waitForLoadState('networkidle');
       await p.close();
     }
     contexts[k] = ctx;
@@ -82,6 +83,8 @@ for (const [vpName, viewport] of Object.entries(VIEWPORTS)) {
       }).slice(0, 5).map((el) => `${el.tagName.toLowerCase()}.${String(el.className).slice(0, 80)} right=${Math.round(el.getBoundingClientRect().right)}`);
       return { scrollWidth: document.documentElement.scrollWidth, vw, wide, h1: document.querySelector('h1')?.textContent ?? null };
     });
+    const expected = (x) => (!user && /401|Unauthorized/.test(x)) || (name === 'verify-unknown' && /404|Not Found/.test(x));
+    issues.splice(0, issues.length, ...issues.filter((x) => !expected(x)));
     if (m.scrollWidth > m.vw) issues.push(`horizontal overflow: scrollWidth ${m.scrollWidth} > ${m.vw}`);
     const file = `${vpName}-${name}.png`;
     await page.screenshot({ path: join(outDir, file), fullPage: true });

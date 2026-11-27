@@ -52,10 +52,15 @@ jobs:
       - name: Tests (unit, integration, API, tenant isolation, RBAC, subscriptions, billing, HR, payroll)
         working-directory: backend
         run: npm test
-      - name: PostgreSQL 16 client tools (match the server; newer pg_dump writes SET transaction_timeout)
+      - name: PostgreSQL 16 client tools (match the server; a newer pg_dump writes SET transaction_timeout)
         run: |
-          sudo apt-get install -y -qq postgresql-client-16 || { sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client-16; }
-          echo /usr/lib/postgresql/16/bin >> "$GITHUB_PATH"
+          mkdir -p "$RUNNER_TEMP/pg16"
+          for t in pg_dump pg_restore psql; do
+            printf '#!/bin/sh\nexec docker run --rm -i --network host -u "$(id -u):$(id -g)" -v /tmp:/tmp -e PGPASSWORD postgres:16 %s "$@"\n' "$t" > "$RUNNER_TEMP/pg16/$t"
+            chmod +x "$RUNNER_TEMP/pg16/$t"
+          done
+          echo "$RUNNER_TEMP/pg16" >> "$GITHUB_PATH"
+          docker pull -q postgres:16
       - name: Backup & restore drill
         run: |
           BACKUP_DATABASE_URL=$DATABASE_URL_OWNER BACKUP_DIR=/tmp/bk ./infrastructure/deployment/backup.sh

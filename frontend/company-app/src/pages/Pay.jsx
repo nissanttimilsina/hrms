@@ -211,11 +211,12 @@ export function MyPayslips() {
 export function MyTax() {
   const toast = useToast();
   const [fy, setFy] = useState('');
-  const { data: s, isPending } = useQuery({ queryKey: ['tax-statement', fy], queryFn: () => api.get(`/payroll/tax-statement${fy ? `?fy=${encodeURIComponent(fy)}` : ''}`) });
+  const { data: s, isPending, error } = useQuery({ queryKey: ['tax-statement', fy], queryFn: () => api.get(`/payroll/tax-statement${fy ? `?fy=${encodeURIComponent(fy)}` : ''}`), retry: false });
   const download = async () => {
     try { await api.download(`/payroll/tax-statement/pdf?fy=${encodeURIComponent(s.fiscalYear)}`, `tax-statement-${s.fiscalYear.replace('/', '-')}.pdf`); } catch (e) { toast.error('Could not download the statement', e.message); }
   };
   if (isPending) return <Skeleton className="h-96" />;
+  if (error) return <><PageHeader title="My tax" /><Card><EmptyState title="Your tax summary is not available" description={error.message} /></Card></>;
   const p = s.projection;
   const t = s.totals;
   const pct = p && p.annualTax > 0 ? Math.min(100, Math.round((t.tds / p.annualTax) * 100)) : 0;
