@@ -89,7 +89,7 @@ jobs:
         if: always()
         run: |
           echo "::group::screens.tar.gz base64"
-          echo "BEGIN-SCREENS"; tar -C /tmp/screens -cz . | base64 -w 120; echo "END-SCREENS"
+          cd /tmp/screens && for f in report.json phone-*.jpg; do echo "BEGIN-FILE $f"; base64 -w 120 "$f"; echo "END-FILE"; done
           echo "::endgroup::"
       - uses: actions/upload-artifact@v4
         if: always()
