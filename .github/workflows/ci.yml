@@ -94,7 +94,7 @@ jobs:
         run: |
           mkdir -p certs
           openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj "/CN=example.com" -keyout certs/privkey.pem -out certs/fullchain.pem
-          docker run --rm --add-host api:127.0.0.1 -e ROOT_DOMAIN=example.com -e MARKETING_HOST=www.example.com -e MARKETING_REDIRECT_HOST=example.com \
+          docker run --rm --add-host api:127.0.0.1 -e ROOT_DOMAIN=example.com -e MARKETING_HOST=www.example.com -e MARKETING_REDIRECT_HOST=example.com -e REAL_IP_FROM=127.0.0.1/32 \
             -v "$PWD/frontend/nginx/templates:/etc/nginx/templates:ro" \
             -v "$PWD/frontend/nginx/snippets:/etc/nginx/snippets:ro" \
             -v "$PWD/certs:/etc/nginx/certs:ro" \

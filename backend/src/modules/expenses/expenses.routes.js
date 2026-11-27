@@ -156,8 +156,10 @@ function view(c, policy) {
 
 /** Load a claim the caller may see: their own, or one inside the scopes passed. */
 async function loadClaim(req, t, id, scopes, { lock = false } = {}) {
-  const c = await app.ExpenseClaim.findByPk(id, { include: [{ model: app.Employee, as: 'employee', attributes: EMP_ATTRS }], transaction: t, ...(lock && { lock: t.LOCK.UPDATE }) });
+  // Lock the claim row on its own: PostgreSQL cannot lock rows through the outer join an include creates.
+  const c = await app.ExpenseClaim.findByPk(id, { transaction: t, ...(lock && { lock: t.LOCK.UPDATE }) });
   if (!c) throw NotFound('Expense claim');
+  c.employee = await app.Employee.findByPk(c.employeeId, { attributes: EMP_ATTRS, transaction: t });
   const own = c.employeeId === req.auth.principal.employeeId;
   if (!own && !(scopes.length && recordInScope(scopes, req.auth.principal, c.employee))) throw NotFound('Expense claim');
   return c;

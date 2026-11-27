@@ -79,8 +79,10 @@ function view(l, req) {
 }
 
 async function loadLetter(req, t, id, scopes, { lock = false } = {}) {
-  const l = await app.LetterRequest.findByPk(id, { include: [{ model: app.Employee, as: 'employee', attributes: EMP_ATTRS }], transaction: t, ...(lock && { lock: t.LOCK.UPDATE }) });
+  // Lock the request row on its own: PostgreSQL cannot lock rows through the outer join an include creates.
+  const l = await app.LetterRequest.findByPk(id, { transaction: t, ...(lock && { lock: t.LOCK.UPDATE }) });
   if (!l) throw NotFound('Letter request');
+  l.employee = await app.Employee.findByPk(l.employeeId, { attributes: EMP_ATTRS, transaction: t });
   const own = l.employeeId === req.auth.principal.employeeId;
   if (!own && !(scopes.length && recordInScope(scopes, req.auth.principal, l.employee))) throw NotFound('Letter request');
   return l;
