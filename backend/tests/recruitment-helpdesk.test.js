@@ -60,6 +60,8 @@ describe('Recruitment and HR helpdesk', () => {
       assert.equal((await C.boss.get('/recruitment/candidates')).status, 403);
       const mine = (await C.boss.get('/recruitment/interviews')).body.data;
       assert.equal(mine.length, 1);
+      assert.equal((await C.boss.get('/recruitment/interviews?upcoming=false')).body.data.length, 1, 'upcoming=false lists all interviews');
+      assert.equal((await C.staff.get('/recruitment/interviews')).body.data.length, 0, 'not on the panel: no interviews');
       assert.equal((await C.staff.get(`/recruitment/interviews/${interview.id}`)).status, 404);
       r = await C.boss.put(`/recruitment/interviews/${interview.id}/feedback`).send({ rating: 4, recommendation: 'YES', scores: { communication: 4, skills: 3 }, notes: 'Knows the market' });
       assert.equal(r.status, 200, JSON.stringify(r.body));

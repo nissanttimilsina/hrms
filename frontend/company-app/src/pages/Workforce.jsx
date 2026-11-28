@@ -23,7 +23,7 @@ function HeadcountChart({ months }) {
         {months.map((m) => (
           <div key={m.month} className="flex min-w-0 flex-1 flex-col items-center justify-end gap-1">
             <span className="text-[10px] tabular-nums text-ink-500">{m.headcount}</span>
-            <div className="w-full rounded-t bg-brand-600/80" style={{ height: `${Math.max(2, (m.headcount / max) * 100)}%` }} title={`${m.month}: ${m.headcount} people, ${m.joined} joined, ${m.exited} left`} />
+            <div className="w-full rounded-t bg-brand-600/80" style={{ height: `${Math.max(2, Math.round((m.headcount / max) * 112))}px` }} title={`${m.month}: ${m.headcount} people, ${m.joined} joined, ${m.exited} left`} />
           </div>
         ))}
       </div>

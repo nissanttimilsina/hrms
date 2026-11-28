@@ -141,7 +141,7 @@ export function TicketDetail() {
         <Card className="self-start">
           <CardHeader title="Details" />
           <CardBody className="space-y-3 text-sm">
-            <div className="flex justify-between gap-2"><span className="text-ink-500">Status</span><StatusBadge value={tk.status} /></div>
+            {!ab.manage && <div className="flex justify-between gap-2"><span className="text-ink-500">Status</span><StatusBadge value={tk.status} /></div>}
             {mineView && tk.status === 'WAITING' && <p className="rounded-md bg-warning-50 p-2 text-warning-700">HR is waiting for your reply.</p>}
             {ab.manage ? (
               <>
@@ -260,7 +260,7 @@ export function HelpdeskSettings() {
       <Card className="mt-3">
         <div className="divide-y divide-line">
           {list.map((c, i) => (
-            <div key={i} className="grid grid-cols-[96px_1fr] items-end gap-3 px-5 py-3 sm:grid-cols-[110px_1fr_130px_auto_auto] [&>*]:min-w-0">
+            <div key={i} className="grid grid-cols-[128px_1fr] items-end gap-3 px-5 py-3 sm:grid-cols-[140px_1fr_130px_auto_auto] [&>*]:min-w-0">
               <Field label="Code"><Input value={c.code} maxLength={20} onChange={(e) => setCat(i, { code: e.target.value.toUpperCase() })} /></Field>
               <Field label="Topic"><Input value={c.name} maxLength={40} onChange={(e) => setCat(i, { name: e.target.value })} /></Field>
               <Field label="Target (hours)"><Input type="number" min="1" value={c.targetHours} onChange={(e) => setCat(i, { targetHours: e.target.value })} /></Field>

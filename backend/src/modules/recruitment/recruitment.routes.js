@@ -361,7 +361,7 @@ recruitmentRouter.post('/candidates/:id/interviews', requirePermission('recruitm
 }));
 
 /** Interviews: the ones I take part in (any login), or all (recruiters). Gated only by the recruitment module. */
-recruitmentRouter.get('/interviews', requireFeature('recruitment'), validate({ query: z.object({ scope: z.enum(['mine', 'all']).default('mine'), upcoming: z.coerce.boolean().default(true) }).strict() }), asyncHandler(async (req, res) => {
+recruitmentRouter.get('/interviews', requireFeature('recruitment'), validate({ query: z.object({ scope: z.enum(['mine', 'all']).default('mine'), upcoming: z.stringbool().default(true) }).strict() }), asyncHandler(async (req, res) => {
   const out = await req.tx(async (t) => {
     const all = req.query.scope === 'all' && holds(req, 'recruitment:view');
     const where = { ...(!all && { interviewerIds: { [Op.contains]: [req.auth.userId] } }), ...(req.query.upcoming && { scheduledAt: { [Op.gte]: new Date(Date.now() - 12 * 3600_000) }, status: 'SCHEDULED' }) };

@@ -200,7 +200,8 @@ workforceRouter.get('/overview', requirePermission('workforce:view'), asyncHandl
     const avg = rows.reduce((n, r) => n + r.headcount, 0) / (rows.length || 1);
     const byDept = await appDb.query(
       `SELECT coalesce(d.name, 'No department') AS name, count(*)::int AS n FROM employees e LEFT JOIN departments d ON d.id = e.department_id
-        WHERE e.deleted_at IS NULL AND e.status <> 'TERMINATED' GROUP BY 1 ORDER BY 2 DESC`, { type: QueryTypes.SELECT, transaction: t });
+        WHERE e.deleted_at IS NULL AND e.joined_on <= CAST(:today AS date) AND (e.exited_on IS NULL OR e.exited_on > CAST(:today AS date))
+        GROUP BY 1 ORDER BY 2 DESC`, { replacements: { today }, type: QueryTypes.SELECT, transaction: t });
     const fy = fiscalYear(today);
     return {
       months: rows.map((r) => ({ month: r.start.slice(0, 7), headcount: r.headcount, joined: r.joined, exited: r.exited })),

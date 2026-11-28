@@ -7,6 +7,7 @@ import { api, useAuth, useAction, PageHeader, StatusBadge, dt, todayKtm, addDays
 import { PersonPicker, Tabs, Tiles, BackLink, ErrorNote } from './kit.jsx';
 
 const Q_TYPES = [['RATING', 'Agree / disagree (1–5)'], ['ENPS', 'Recommend us (0–10)'], ['CHOICE', 'Pick one option'], ['TEXT', 'Written answer']];
+const BAR = ['bg-danger-600', 'bg-warning-600', 'bg-ink-400', 'bg-brand-600', 'bg-success-600'];
 const AGREE = { 1: 'Strongly disagree', 2: 'Disagree', 3: 'Neutral', 4: 'Agree', 5: 'Strongly agree' };
 
 // =========================================================================== surveys list
@@ -185,11 +186,12 @@ function Results({ id }) {
           <p className="mb-3 font-medium text-ink-900"><span className="text-ink-400">{i + 1}. </span>{q.text}</p>
           {q.type === 'RATING' && <>
             <div className="flex h-7 overflow-hidden rounded-md" aria-label={`Average ${q.average}`}>
-              {q.distribution.map((n, k) => n > 0 && <div key={k} style={{ width: `${(n / q.answered) * 100}%` }} className={cn('grid place-items-center text-xs font-medium text-white', ['bg-danger-600', 'bg-warning-600', 'bg-ink-400', 'bg-brand-600', 'bg-success-600'][k])}>{Math.round((n / q.answered) * 100)}%</div>)}
+              {q.distribution.map((n, k) => n > 0 && <div key={k} title={`${AGREE[k + 1]}: ${n}`} style={{ width: `${(n / q.answered) * 100}%` }} className={cn('grid place-items-center text-xs font-medium text-white', BAR[k])}>{Math.round((n / q.answered) * 100)}%</div>)}
             </div>
+            <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-ink-500">{q.distribution.map((n, k) => n > 0 && <li key={k} className="inline-flex items-center gap-1.5"><span className={cn('size-2.5 rounded-sm', BAR[k])} />{AGREE[k + 1]} ({n})</li>)}</ul>
             <p className="mt-2 text-sm text-ink-500">Average {q.average} of 5 · {q.favourable}% favourable · {q.answered} answers</p>
           </>}
-          {q.type === 'ENPS' && <p className="text-sm text-ink-700"><span className="text-2xl font-semibold text-ink-900">{q.enps > 0 ? '+' : ''}{q.enps}</span> · {q.promoters} promoters (9–10), {q.passives} passive (7–8), {q.detractors} detractors (0–6)</p>}
+          {q.type === 'ENPS' && <p className="text-sm text-ink-700"><span className="text-2xl font-semibold text-ink-900">{q.enps > 0 ? '+' : ''}{q.enps}</span> · {q.promoters} {q.promoters === 1 ? 'promoter' : 'promoters'} (9–10), {q.passives} passive (7–8), {q.detractors} {q.detractors === 1 ? 'detractor' : 'detractors'} (0–6)</p>}
           {q.type === 'CHOICE' && <div className="space-y-1.5">{q.counts.sort((x, y) => y.count - x.count).map((c) => (
             <div key={c.option} className="flex items-center gap-2 text-sm"><span className="w-40 shrink-0 truncate text-ink-700">{c.option}</span><div className="h-2 flex-1 rounded-full bg-subtle"><div className="h-full rounded-full bg-brand-600" style={{ width: `${q.answered ? (c.count / q.answered) * 100 : 0}%` }} /></div><span className="w-8 text-right tabular-nums text-ink-500">{c.count}</span></div>
           ))}</div>}

@@ -58,7 +58,7 @@ function GoalList({ goals, onEdit, onProgress, showPerson }) {
         <Card key={g.id}><CardBody>
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">{showPerson && <p className="text-xs font-medium text-ink-500">{g.employee?.name}</p>}<p className="font-semibold text-ink-900">{g.title}</p><p className="text-xs text-ink-500">{[g.measure, g.target && `target ${g.target}`, g.dueDate && `by ${dt(g.dueDate)}`].filter(Boolean).join(' · ')}</p></div>
-            <div className="flex shrink-0 flex-col items-end gap-1">{g.weight > 0 && <Badge>{g.weight}%</Badge>}{g.status !== 'ACTIVE' && <Badge tone={g.status === 'ACHIEVED' ? 'success' : g.status === 'MISSED' ? 'danger' : 'neutral'}>{label(g.status)}</Badge>}</div>
+            <div className="flex shrink-0 flex-col items-end gap-1">{g.weight > 0 && <Badge>Weight {g.weight}%</Badge>}{g.status !== 'ACTIVE' && <Badge tone={g.status === 'ACHIEVED' ? 'success' : g.status === 'MISSED' ? 'danger' : 'neutral'}>{label(g.status)}</Badge>}</div>
           </div>
           <div className="mt-3"><Progress value={g.progress} tone={g.status === 'ACHIEVED' ? 'success' : 'brand'} /></div>
           {g.actual && <p className="mt-1 text-xs text-ink-500">Result: {g.actual}</p>}

@@ -28,7 +28,7 @@ import { Access, Announcements, Billing, Support, SupportTicket, Settings, Audit
 import './styles.css';
 
 const I = (C) => <C className="size-4" />;
-function buildNav(a) {
+function buildNav(a, opts = {}) {
   const f = a.feature; const can = a.can; const wide = a.wide;
   const me = a.employeeId;
   return [
@@ -67,7 +67,7 @@ function buildNav(a) {
       wide('employees:view') && { key: '/employees', label: 'Employees', icon: I(Users) },
       can('branches:view') && wide('employees:view') && { key: '/organization', label: 'Organization', icon: I(Building2) },
       f('recruitment') && can('recruitment:view') && { key: '/recruitment', label: 'Recruitment', icon: I(Briefcase) },
-      f('recruitment') && !can('recruitment:view') && { key: '/interviews', label: 'My interviews', icon: I(CalendarClock) },
+      f('recruitment') && !can('recruitment:view') && opts.interviewer && { key: '/interviews', label: 'My interviews', icon: I(CalendarClock) },
       f('onboarding') && wide('onboarding:view') && { key: '/onboarding', label: 'Onboarding & exits', icon: I(DoorOpen) },
       f('kpi_appraisal') && (wide('appraisals:edit') || can('appraisals:configure')) && { key: '/appraisals', label: 'Performance reviews', icon: I(Target) },
       f('training') && (wide('training:view') || can('training:manage')) && { key: '/training', label: 'Training', icon: I(GraduationCap) },
@@ -145,7 +145,9 @@ function Shell() {
     );
   }
   const { me } = a;
-  const navItems = buildNav(a);
+  // "My interviews" only for people who are on an interview panel (same query as the dashboard card).
+  const myInterviews = useQuery({ queryKey: ['my-interviews'], queryFn: () => api.get('/recruitment/interviews'), enabled: !!a.feature?.('recruitment') && !a.can('recruitment:view'), retry: false, staleTime: 60_000 });
+  const navItems = buildNav(a, { interviewer: (myInterviews.data?.length ?? 0) > 0 });
   const keys = navItems.flatMap((s) => s.items.map((i) => i.key));
   const active = keys.filter((k) => (k === '/' ? loc.pathname === '/' : loc.pathname === k || loc.pathname.startsWith(`${k}/`))).sort((x, y) => y.length - x.length)[0];
   const sub = me.subscription;
