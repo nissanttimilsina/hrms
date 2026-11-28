@@ -10,7 +10,7 @@ const { chromium } = await import(join(pwDir, 'node_modules/playwright-core/inde
 const BASE = process.env.SITE_URL ?? 'http://localhost:4176';
 mkdirSync(outDir, { recursive: true });
 const VIEWPORTS = { desktop: { width: 1440, height: 900 }, phone: { width: 390, height: 844 } };
-const PAGES = [['home', '/'], ['pricing', '/pricing'], ['features', '/features'], ['feature-recruitment', '/features/recruitment']];
+const PAGES = [['home', '/'], ['pricing', '/pricing/'], ['features', '/features/'], ['feature-recruitment', '/features/recruitment/']];
 
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH ?? '/usr/bin/google-chrome', args: ['--no-sandbox'] });
 let failed = 0;
