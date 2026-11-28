@@ -143,3 +143,7 @@ for (const [vpName, viewport] of Object.entries(VIEWPORTS)) {
 }
 await browser.close();
 writeFileSync(join(outDir, 'report.json'), JSON.stringify(report, null, 2));
+const failed = report.filter((r) => r.issues.length);
+console.log(`\n${report.length} page checks, ${failed.length} with issues`);
+// Fail the job so problems cannot hide behind a green tick; screenshots are still printed by the next step.
+if (failed.length) process.exitCode = 1;

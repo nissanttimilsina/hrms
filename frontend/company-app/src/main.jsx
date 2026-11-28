@@ -130,6 +130,10 @@ function Shell() {
   const a = useAuth();
   const loc = useLocation();
   const nav = useNavigate();
+  // "My interviews" only for people who are on an interview panel (same query as the dashboard card).
+  // Declared before the early returns so the hook order never changes.
+  const signedIn = a.status !== 'loading' && a.status !== 'out';
+  const myInterviews = useQuery({ queryKey: ['my-interviews'], queryFn: () => api.get('/recruitment/interviews'), enabled: signedIn && !!a.feature?.('recruitment') && !a.can?.('recruitment:view'), retry: false, staleTime: 60_000 });
   if (a.status === 'loading') return <div className="p-10"><Skeleton className="h-64" /></div>;
   if (a.status === 'out') {
     return (
@@ -145,8 +149,6 @@ function Shell() {
     );
   }
   const { me } = a;
-  // "My interviews" only for people who are on an interview panel (same query as the dashboard card).
-  const myInterviews = useQuery({ queryKey: ['my-interviews'], queryFn: () => api.get('/recruitment/interviews'), enabled: !!a.feature?.('recruitment') && !a.can('recruitment:view'), retry: false, staleTime: 60_000 });
   const navItems = buildNav(a, { interviewer: (myInterviews.data?.length ?? 0) > 0 });
   const keys = navItems.flatMap((s) => s.items.map((i) => i.key));
   const active = keys.filter((k) => (k === '/' ? loc.pathname === '/' : loc.pathname === k || loc.pathname.startsWith(`${k}/`))).sort((x, y) => y.length - x.length)[0];
