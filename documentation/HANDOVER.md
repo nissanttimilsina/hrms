@@ -55,8 +55,8 @@ There are three applications and one API:
 
 ## 3. Where things stand right now
 
-- **All work is committed and pushed.** `main` is at `2e2bee8` ("Work management: tasks, daily reports, reviews, performance, new dashboard"). The working tree is clean.
-- **Backend tests: 208 passing** (`cd backend && npm test`).
+- **All work is committed and pushed.** `main` includes stage 2 (pull request #2, roadmap modules) on top of stage 1 (pull request #1). The working tree is clean.
+- **Backend tests: 258 passing** (`cd backend && npm test`), run in CI because the sandbox has no npm.
 - **Production probably runs an older commit.** He has deployed several times, and the last confirmed deploy included `586c020`. Anything after it, including the delete-employee feature `8efdc0d` and work management `2e2bee8`, is live only once he runs the deploy. Ask him, or have him run `git -C /opt/hrms log --oneline -1`.
 
 Deploy command (as root):
@@ -74,6 +74,8 @@ The deploy builds the images, runs `migrate` (SQL migrations, then `seeds/run.js
 - One employee, "Nishan Timilsina", was deleted and re-added with a login invitation. The re-add happened after the delete feature was built, so it was deployed by then.
 - **Email works.** It is sent through Brevo SMTP from `no-reply@lishnutech.com`; the domain is authenticated with DKIM and DMARC. Brevo's "Authorized IPs" list includes `163.61.41.51`. To test: `docker compose exec api node src/scripts/send-test-email.js you@example.com`, run in `/opt/hrms/infrastructure/docker`.
 - **Super Admin password reset:** `docker compose exec api node src/scripts/reset-platform-password.js <email>`, optionally with `NEW_PASSWORD=...` set.
+
+**Stage 2, the roadmap modules (§12b)**, is merged into `main` (pull request #2): assets, onboarding and exits, recruitment, HR helpdesk, training, performance reviews, surveys and recognition, workforce planning and custom request workflows. 258 backend tests pass, the frontend builds, and all 46 new pages were checked at desktop size and 390 px through the `UI check` workflow. Migration 014 runs on deploy. The owner still needs to deploy it.
 
 **Stage 1 of employee self-service (§12a)** is merged into `main` (pull request #1). All 222 backend tests pass and the frontend build passes. The pages were checked in Chrome at desktop size and 390 px through the `UI check` workflow (see §15). That check led to: compact phone rows for tables (`DataTable` prop `mobile(row)`), a fix for a page-wide overflow on Letter requests, names kept capitalised in "Waiting for …", and error states on My tax and My letters. The owner still needs to deploy it.
 
@@ -434,6 +436,33 @@ Asked for by the owner: "something professional, long term, more than other syst
 
 **Tests:** `tests/self-service.test.js` (14 tests) covers the score fixes, the whole expense flow including payroll, letters including public verification and withdrawal, the tax statement, and correction cancel. All pass in CI.
 
+## 12b. Roadmap modules, stage 2 (branch `stage-2-roadmap`, pull request #2)
+
+The owner asked to "complete all the roadmap things" from the website, in this order, delivered as one merge and one deploy: assets → onboarding/offboarding → recruitment → helpdesk → training → performance appraisals → engagement → workforce planning → custom workflows. **The AI HR assistant stays on the roadmap** (his decision); nothing was built for it.
+
+**Shared pieces:**
+- Migration `014_talent_and_operations.sql`: all new tables with forced RLS (DO-block pattern), composite `(tenant_id, id)` foreign keys, grants. It also extends the `files.owner_type` check (`CANDIDATE_CV`, `HELPDESK_ATTACHMENT`, `TRAINING_CERTIFICATE`), adds engagement and workforce planning to existing BUSINESS plan entitlements, and grants existing permissions (assets, training) to existing companies' system roles — the seed alone only backfills *new* permissions.
+- New permission resources in `catalog.js`: `onboarding`, `helpdesk`, `appraisals` (feature `kpi_appraisal`), `engagement`, `workforce` (unscoped) and `requests` (feature `workflows`). `assets` and `training` already existed.
+- `services/module-kit.js`: helpers shared by the new modules (employee refs and names, scope checks, `nextNumber` with an advisory lock for human numbers like `AST-1`, tenant settings, CSV).
+- `GET /directory` (`modules/directory`): a light colleague search for pickers (name, code, department, whether they have a login); any signed-in user, active employees only.
+- `employees.routes.js` now exports `createEmployee` (used by hiring) and `terminateEmployee` (used when an exit checklist is completed).
+- Frontend: `pages/kit.jsx` (PersonPicker, PeoplePicker, Tabs, Rating, Stars, Progress, Tiles, useDownload…), `pages/ForYou.jsx` (the dashboard's "Waiting for you" card across all modules), nav sections "My space", "Together" and "People".
+
+**Modules** (plan in brackets; Professional includes recruitment, onboarding and workflows; Business adds the rest):
+- **Assets** [Business] `/assets`: register with tag, serial, model, branch, cost, warranty; assign → return with condition; repair/lost/retired statuses; employees see My assets and report a problem; full history; warranty-expiring tile; CSV. Exit checklists list the leaver's items (`assetsHeldBy`).
+- **Onboarding and exits** [Professional] `/onboarding`: checklist templates (default joining and exit lists, editable) copied into a "journey" per person, with tasks for the employee, manager, HR, IT and finance, due dates relative to the joining/last day, overdue flags, "Tasks for me". Exit journeys carry notice, last day, reason and an exit interview (ratings, would-recommend). Completing an exit runs `terminateEmployee`. Hiring a candidate starts onboarding (`startJourney`).
+- **Recruitment** [Professional] `/recruitment`: job openings (draft/open/on hold/filled/closed) with a public careers page at `https://<slug>.<domain>/careers` (API `/api/v1/careers`, public, company host only, CV upload as PDF, consent box); candidates through applied → screening → interview → offer → hired/rejected/withdrawn with an activity log; interviews with panels; interviewers get "My interviews" and a scorecard (own score first, others' scores hidden until they submit); offers with a PDF offer letter on the letterhead; hire creates the employee and starts onboarding.
+- **HR helpdesk** [Business] `/helpdesk`, employees "Ask HR" `/me/helpdesk`: tickets with topics (code, target hours, private topics only HR leads see), priority, assignee, internal notes, attachments, "waiting for the employee", resolve → employee rates; summary tiles (open, unassigned, past target, satisfaction); CSV.
+- **Training** [Business] `/training`, `/me/training`: courses (required for everyone, certificate validity, cost per person), sessions, enrolments with manager approval for requests, completion, certificates (upload), feedback; compliance grid for required courses; expiring/expired certificate tiles; CSV.
+- **Performance reviews** [Business, feature `kpi_appraisal`] `/appraisals`, `/me/goals`, `/me/reviews`: goals with weights and progress; review cycles (goals vs competencies weighting, competency list) launched for chosen people; self review → manager review → HR sign-off → ready to read → acknowledged; 360° feedback requests; the work score from tasks/reports (`performance()`) is shown alongside; cycle CSV.
+- **Surveys and recognition** [Business, feature `engagement`] `/surveys`, `/recognition`: surveys from templates (pulse, eNPS…), anonymous by default (no user id stored with answers; results hidden below a minimum group size, also per department); eNPS and favourable %; public kudos with values and a monthly leaderboard; HR can hide kudos.
+- **Workforce planning** [Business, feature `workforce_planning`] `/workforce`: headcount plans per fiscal year with rows by department/designation/branch, planned vs employed vs being recruited, budget vs actual monthly salary, "Open a job" from a gap; overview with 12-month headcount, joiners, leavers, turnover and by-department counts; approve/archive; CSV.
+- **Requests (custom workflows)** [Professional, feature `workflows`] `/workflows`: forms designed by HR (fields: text, long text, number, amount, date, choice, checkbox) with approval steps (their manager, their manager's manager, anyone with a role, or a named person); ready-made forms (work from home, purchase, travel, overtime pre-approval); employees send requests and follow each step; approvers get a "To approve" inbox; CSV.
+
+**Checks:** backend tests in `tests/assets-onboarding.test.js`, `recruitment-helpdesk.test.js`, `training-appraisals.test.js`, `engagement-planning-workflows.test.js` (helpers in `tests/helpers/people.js`). The `UI check` fixtures put the demo company on Business with data for every module and capture 46 extra pages at desktop and 390 px; all were reviewed. Review fixes: workforce chart bars (percentage heights inside a flex column collapsed to zero; now pixel heights), by-department counts exclude future joiners, "My interviews" shows only for people on a panel, `upcoming=false` on `/recruitment/interviews` (zod `coerce.boolean` turns `"false"` into true; use `z.stringbool()`), wider helpdesk topic codes, labelled goal weights, survey answer legend.
+
+**Website:** the nine modules are `available` in `features.js` with rewritten copy; `ai-hr-assistant` stays coming soon. The marketing mega-menu now lists more live items; it built cleanly but was not checked visually.
+
 ## 13. Integrations
 
 - **Email:**
@@ -566,14 +595,19 @@ These notes describe the cloud workspace earlier sessions used. A new session ma
 - General data-retention settings for employee data.
 - MFA.
 - Custom domains for companies.
-- Formal performance appraisals (goals and appraisal cycles). Day-to-day performance from tasks and reports *is* built.
-- Recruitment, onboarding/offboarding, expenses, assets, training, workforce planning, helpdesk, engagement, AI assistant, custom workflows. These are marked "On the roadmap" on the site.
+- AI HR assistant (kept on the roadmap by the owner's decision). Everything else that was on the website roadmap shipped in stage 2 (§12b).
+- Job-board posting (the careers page is the company's own), e-signature of offer letters, a course content/LMS player in Training, survey reminders by email.
 
 **Needs real-world confirmation:**
 - One real ZKTeco terminal at go-live.
 - One small live eSewa and one live Khalti payment.
 - Legal pages are drafts that need review by Nepali counsel.
 - Tax slabs and SSF rates must be checked every Shrawan.
+
+**Stage 2 follow-ups:**
+- Deploy `main` (stage 2 merged; migration 014 runs on deploy).
+- After deploy: fill in the letterhead if not done (offer letters use it), review the default onboarding/exit checklists (Onboarding and exits → Checklists) and helpdesk topics (HR helpdesk → Topics), and post a changelog entry in the Super Admin.
+- The `lishnu` company is on Business, so every module shows; Professional companies see recruitment, onboarding and requests only.
 
 **Stage 1 follow-ups:**
 - Deploy `main` (stage 1 is merged).
@@ -603,8 +637,8 @@ These notes describe the cloud workspace earlier sessions used. A new session ma
 2. Help the owner set up reporting managers and roles in the `lishnu` workspace.
 3. If he asks for more on work management, the natural additions are task attachments, recurring tasks and checklists.
 4. MFA (TOTP) for Super Admin staff and company owners.
-5. Expense claims linked to payroll pay items, then assets, then recruitment and onboarding, using the existing patterns. Update the website status when each ships.
-6. Refresh `documentation/database/schema.md` from migrations 001–012.
+5. Gather the owner's feedback on the stage 2 modules (§12b) once deployed; likely next asks: email reminders for surveys and reviews, offer e-signature, a logo upload for the letterhead.
+6. Refresh `documentation/database/schema.md` from migrations 001–014.
 
 ## 20. Starting a new session
 
