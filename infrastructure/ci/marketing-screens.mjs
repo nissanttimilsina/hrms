@@ -37,6 +37,20 @@ for (const [vp, size] of Object.entries(VIEWPORTS)) {
         await page.waitForTimeout(300);
       }
     }
+    if (name === 'pricing') {
+      // The calculator: default state, then pick modules that need the Business plan.
+      const calc = page.locator('#calculator');
+      await calc.scrollIntoViewIfNeeded();
+      await page.waitForTimeout(1500);
+      await calc.screenshot({ path: join(outDir, `mk-${vp}-calc-1.jpg`), type: 'jpeg', quality: 75 });
+      for (const label of ['Recruitment', 'Performance reviews']) await calc.getByRole('checkbox', { name: label }).click();
+      await page.waitForTimeout(350);
+      await calc.screenshot({ path: join(outDir, `mk-${vp}-calc-mid.jpg`), type: 'jpeg', quality: 75 });
+      await page.waitForTimeout(1500);
+      await calc.screenshot({ path: join(outDir, `mk-${vp}-calc-2.jpg`), type: 'jpeg', quality: 75 });
+      const plan = await calc.locator('.calc-in').first().textContent();
+      if (!/Business/.test(plan ?? '')) issues.push(`calculator recommended "${plan}" for performance reviews, expected Business`);
+    }
     if (name === 'home') {
       // Catch the pricing cards mid-animation, to show the count-up is happening.
       await page.locator('text=Plans for 5 people or 500').scrollIntoViewIfNeeded();

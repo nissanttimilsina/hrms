@@ -144,12 +144,36 @@ export function ComparisonTable({ plans }) {
 }
 
 // --------------------------------------------------------------------------- calculator
-const CALC_MODULES = ['attendance', 'leave', 'payroll', 'shifts', 'recruitment', 'expenses', 'performance', 'training', 'assets', 'custom_fields', 'api_integrations', 'analytics_advanced', 'ai_assistant'];
-const MODULE_NAMES = { api_integrations: 'API Integrations', analytics_advanced: 'Advanced Analytics', custom_fields: 'Custom Fields', ai_assistant: 'AI HR Assistant' };
-const moduleName = (k) => MODULE_NAMES[k] ?? FEATURES.find((f) => f.key === k)?.name ?? k.replace(/_/g, ' ');
+// Only modules that are built. Keys are plan feature keys; the quote API picks the smallest plan that has them all.
+const CALC_GROUPS = [
+  ['Time and pay', [['attendance', 'Attendance', 'Clock'], ['leave', 'Leave', 'CalendarDays'], ['payroll', 'Nepal payroll', 'Wallet'], ['shifts', 'Shifts', 'CalendarClock'], ['biometric', 'Fingerprint devices', 'Fingerprint'], ['expenses', 'Expense claims', 'Receipt']]],
+  ['Hiring and growth', [['recruitment', 'Recruitment', 'UserPlus'], ['onboarding', 'Onboarding and exits', 'DoorOpen'], ['kpi_appraisal', 'Performance reviews', 'Target'], ['training', 'Training', 'GraduationCap'], ['engagement', 'Surveys and recognition', 'HeartHandshake']]],
+  ['HR operations', [['helpdesk', 'HR helpdesk', 'LifeBuoy'], ['assets', 'Assets', 'Laptop'], ['workflows', 'Request forms', 'Workflow'], ['workforce_planning', 'Workforce planning', 'Network']]],
+];
+const CALC_MODULES = CALC_GROUPS.flatMap(([, items]) => items.map(([k]) => k));
+const moduleName = (k) => CALC_GROUPS.flatMap(([, items]) => items).find(([key]) => key === k)?.[1] ?? k;
+const LADDER = [['BASIC', 'Basic'], ['PROFESSIONAL', 'Professional'], ['BUSINESS', 'Business'], ['ENTERPRISE', 'Enterprise']];
+
+function Stepper({ label, value, onChange, min = 1, max = 100000 }) {
+  const set = (v) => onChange(Math.min(max, Math.max(min, Number(v) || min)));
+  return (
+    <div>
+      <p className="text-sm font-medium text-ink-900">{label}</p>
+      <div className="mt-2 flex h-11 items-center rounded-xl border border-line-strong bg-white focus-within:border-brand-600 focus-within:ring-2 focus-within:ring-brand-100">
+        <button type="button" aria-label={`Fewer ${label.toLowerCase()}`} onClick={() => set(value - 1)} className="grid h-full w-11 place-items-center rounded-l-xl text-ink-500 transition hover:bg-canvas hover:text-ink-900 active:scale-90"><Icon name="Minus" className="size-4" /></button>
+        <input aria-label={label} inputMode="numeric" value={value} onChange={(e) => set(e.target.value.replace(/\D/g, ''))} className="h-full min-w-0 flex-1 bg-transparent text-center text-base font-semibold tabular-nums text-ink-900 outline-none" />
+        <button type="button" aria-label={`More ${label.toLowerCase()}`} onClick={() => set(value + 1)} className="grid h-full w-11 place-items-center rounded-r-xl text-ink-500 transition hover:bg-canvas hover:text-ink-900 active:scale-90"><Icon name="Plus" className="size-4" /></button>
+      </div>
+    </div>
+  );
+}
+
+const Money = ({ value, className }) => (
+  <span className={cn('tabular-nums', className)}>NPR <CountUp value={Math.round((value ?? 0) * 100)} format={(c) => formatPrice(c / 100)} duration={600} /></span>
+);
 
 export function PricingCalculator() {
-  const [form, setForm] = useState({ employees: 25, branches: 1, modules: ['attendance', 'leave'], billingCycle: 'MONTHLY', coupon: '' });
+  const [form, setForm] = useState({ employees: 25, branches: 1, modules: ['attendance', 'leave', 'payroll'], billingCycle: 'MONTHLY', coupon: '' });
   const [quote, setQuote] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -162,53 +186,99 @@ export function PricingCalculator() {
         setQuote(await api.post('/pricing/quote', { ...form, coupon: form.coupon || undefined }));
         setError(null);
       } catch (e) { setError(e.message); } finally { setLoading(false); }
-    }, 300);
+    }, 250);
     return () => clearTimeout(t);
   }, [form]);
 
   const toggle = (k) => setForm((f) => ({ ...f, modules: f.modules.includes(k) ? f.modules.filter((m) => m !== k) : [...f.modules, k] }));
-  const num = (k) => (e) => setForm((f) => ({ ...f, [k]: Math.max(1, Number(e.target.value) || 1) }));
+  const planCode = quote ? (quote.contactSales ? 'ENTERPRISE' : quote.recommended) : null;
+  const rung = Math.max(0, LADDER.findIndex(([c]) => c === planCode));
+  const annual = form.billingCycle === 'ANNUAL';
 
   return (
-    <div className="grid gap-6 rounded-2xl border border-line bg-white p-6 shadow-card lg:grid-cols-[1.3fr_1fr] lg:p-8">
-      <div className="space-y-5">
-        <div className="grid gap-4 sm:grid-cols-3">
-          <Field label="Employees" required><Input type="number" min={1} value={form.employees} onChange={num('employees')} /></Field>
-          <Field label="Branches" required><Input type="number" min={1} value={form.branches} onChange={num('branches')} /></Field>
-          <Field label="Billing">
-            <Select value={form.billingCycle} onChange={(e) => setForm((f) => ({ ...f, billingCycle: e.target.value }))} options={[{ value: 'MONTHLY', label: 'Monthly' }, { value: 'ANNUAL', label: 'Annual' }]} />
-          </Field>
-        </div>
-        <fieldset>
-          <legend className="mb-2 text-sm font-medium text-ink-900">Modules you need</legend>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-            {CALC_MODULES.map((k) => <Checkbox key={k} label={moduleName(k)} checked={form.modules.includes(k)} onChange={() => toggle(k)} />)}
+    <div className="grid grid-cols-1 overflow-hidden rounded-3xl border border-line bg-white shadow-card lg:grid-cols-[1.35fr_1fr] [&>*]:min-w-0">
+      {/* inputs */}
+      <div className="space-y-8 p-6 sm:p-8">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_1fr_auto] [&>*]:min-w-0">
+          <Stepper label="Employees" value={form.employees} onChange={(v) => setForm((f) => ({ ...f, employees: v }))} />
+          <Stepper label="Branches" value={form.branches} max={1000} onChange={(v) => setForm((f) => ({ ...f, branches: v }))} />
+          <div>
+            <p className="text-sm font-medium text-ink-900">Billing</p>
+            <div className="relative mt-2 grid h-11 grid-cols-2 rounded-xl bg-subtle p-1 text-sm font-medium" role="radiogroup" aria-label="Billing">
+              <span className="absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-lg bg-white shadow-sm transition-transform duration-300 ease-out" style={{ transform: annual ? 'translateX(100%)' : 'none' }} aria-hidden />
+              {[['MONTHLY', 'Monthly'], ['ANNUAL', 'Annual']].map(([v, l]) => (
+                <button key={v} type="button" role="radio" aria-checked={form.billingCycle === v} onClick={() => setForm((f) => ({ ...f, billingCycle: v }))} className={cn('relative z-10 px-4 transition-colors', form.billingCycle === v ? 'text-ink-900' : 'text-ink-500 hover:text-ink-700')}>{l}</button>
+              ))}
+            </div>
           </div>
+        </div>
+
+        <fieldset>
+          <legend className="flex w-full items-baseline justify-between gap-3">
+            <span className="text-sm font-medium text-ink-900">Modules you need</span>
+            <span className="text-xs text-ink-500">{form.modules.length} selected</span>
+          </legend>
+          <div className="mt-3 space-y-5">
+            {CALC_GROUPS.map(([title, items]) => (
+              <div key={title}>
+                <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">{title}</p>
+                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3 [&>*]:min-w-0">
+                  {items.map(([k, label, icon]) => {
+                    const on = form.modules.includes(k);
+                    return (
+                      <button key={k} type="button" role="checkbox" aria-checked={on} onClick={() => toggle(k)}
+                        className={cn('group flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left text-sm transition duration-200 active:scale-[0.97]',
+                          on ? 'border-brand-600 bg-brand-50 text-ink-900 shadow-[0_0_0_1px_var(--color-brand-600)]' : 'border-line bg-white text-ink-700 hover:border-line-strong hover:bg-canvas')}>
+                        <span className={cn('grid size-7 shrink-0 place-items-center rounded-lg transition-colors duration-200', on ? 'bg-brand-600 text-white' : 'bg-subtle text-ink-500 group-hover:text-ink-700')}>
+                          <Icon name={on ? 'Check' : icon} className="size-4" />
+                        </span>
+                        <span className="min-w-0 truncate font-medium">{label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-ink-500">Employee records, documents, the self-service app and reports come with every plan.</p>
         </fieldset>
+
         <Field label="Promo code" error={error && form.coupon ? error : undefined}><Input value={form.coupon} onChange={(e) => setForm((f) => ({ ...f, coupon: e.target.value.toUpperCase() }))} placeholder="Optional" className="max-w-48" /></Field>
       </div>
-      <div className="flex flex-col rounded-xl bg-subtle p-6" aria-live="polite">
-        {!quote ? <Skeleton className="h-40" /> : quote.contactSales ? (
-          <>
-            <p className="text-sm font-medium text-ink-500">Recommended</p>
-            <p className="mt-1 text-2xl font-semibold text-ink-900">Enterprise</p>
-            <p className="mt-2 text-sm text-ink-700">Your requirements go beyond our standard packages ({quote.reasons.join('; ')}). We'll prepare a custom quotation.</p>
-            <ButtonLink to={`/contact?type=enterprise&employees=${form.employees}&branches=${form.branches}`} className="mt-auto w-full" size="md">Request a quotation</ButtonLink>
-          </>
+
+      {/* summary */}
+      <div className="relative flex flex-col bg-[#0f1729] p-6 text-white sm:p-8" aria-live="polite">
+        <div aria-hidden className="pointer-events-none absolute -right-24 -top-24 size-72 rounded-full bg-brand-600/30 blur-3xl" />
+        <p className="relative text-sm text-white/60">Recommended plan</p>
+        {/* plan ladder: the pill slides to the recommended plan */}
+        <div className="relative mt-3 grid grid-cols-4 rounded-xl bg-white/5 p-1 text-center text-xs font-medium">
+          <span aria-hidden className="absolute inset-y-1 left-1 w-[calc(25%-2px)] rounded-lg bg-white transition-transform duration-500 ease-[cubic-bezier(.2,.8,.2,1)]" style={{ transform: `translateX(${rung * 100}%)`, opacity: quote ? 1 : 0 }} />
+          {LADDER.map(([c, l], k) => <span key={c} className={cn('relative z-10 truncate px-1 py-2 transition-colors duration-300', k === rung && quote ? 'text-ink-900' : 'text-white/55')}>{l}</span>)}
+        </div>
+
+        {!quote ? <div className="mt-6 h-40 animate-pulse rounded-xl bg-white/5" /> : quote.contactSales ? (
+          <div key="ent" className="calc-in relative mt-6 flex flex-1 flex-col">
+            <p className="text-3xl font-semibold tracking-tight">Enterprise</p>
+            <p className="mt-3 text-sm text-white/70">Your needs go beyond the standard plans ({quote.reasons.join('; ')}). We'll prepare a quotation for you.</p>
+            <ButtonLink to={`/contact?type=enterprise&employees=${form.employees}&branches=${form.branches}`} variant="inverse" className="mt-auto w-full" size="md">Request a quotation</ButtonLink>
+          </div>
         ) : (
-          <>
-            <p className="text-sm font-medium text-ink-500">Recommended plan</p>
-            <p className="mt-1 text-2xl font-semibold text-ink-900">{quote.planName}</p>
-            <dl className={cn('mt-4 space-y-1.5 text-sm', loading && 'opacity-60')}>
-              <div className="flex justify-between"><dt className="text-ink-500">Subtotal</dt><dd className="tabular-nums">NPR {formatPrice(quote.subtotal)}</dd></div>
-              {quote.discount > 0 && <div className="flex justify-between text-success-700"><dt>Discount ({quote.coupon})</dt><dd className="tabular-nums">− NPR {formatPrice(quote.discount)}</dd></div>}
-              <div className="flex justify-between"><dt className="text-ink-500">VAT {quote.taxRate}%</dt><dd className="tabular-nums">NPR {formatPrice(quote.tax)}</dd></div>
-              <div className="flex justify-between border-t border-line-strong pt-2 text-base font-semibold text-ink-900"><dt>Total / {quote.billingCycle === 'ANNUAL' ? 'year' : 'month'}</dt><dd className="tabular-nums">NPR {formatPrice(quote.total)}</dd></div>
-            </dl>
-            <p className="mt-2 text-xs text-ink-500">≈ NPR {formatPrice(quote.perEmployeeMonthly)} per employee per month before VAT</p>
-            <ButtonLink to={`/signup?plan=${quote.recommended}&cycle=${quote.billingCycle}`} className="mt-6 w-full" size="md">Start {quote.trialDays}-day free trial</ButtonLink>
-            <p className="mt-2 text-center text-xs text-ink-500">No payment needed for the trial</p>
-          </>
+          <div className="relative mt-6 flex flex-1 flex-col">
+            <p key={quote.planName} className="calc-in text-3xl font-semibold tracking-tight">{quote.planName}</p>
+            <p className="mt-1 text-sm text-white/60">{form.employees} {form.employees === 1 ? 'employee' : 'employees'} · {form.branches} {form.branches === 1 ? 'branch' : 'branches'} · billed {annual ? 'yearly' : 'monthly'}</p>
+            <div className={cn('mt-6 transition-opacity', loading && 'opacity-70')}>
+              <p className="text-sm text-white/60">Total per {quote.billingCycle === 'ANNUAL' ? 'year' : 'month'}, with VAT</p>
+              <Money value={quote.total} className="mt-1 block text-4xl font-semibold tracking-tight" />
+              <dl className="mt-5 space-y-2 border-t border-white/10 pt-4 text-sm">
+                <div className="flex justify-between gap-3"><dt className="text-white/60">Plan price</dt><dd><Money value={quote.subtotal} /></dd></div>
+                {quote.discount > 0 && <div className="flex justify-between gap-3 text-[#6ee7b7]"><dt>Discount ({quote.coupon})</dt><dd>− <Money value={quote.discount} /></dd></div>}
+                <div className="flex justify-between gap-3"><dt className="text-white/60">VAT {quote.taxRate}%</dt><dd><Money value={quote.tax} /></dd></div>
+                <div className="flex justify-between gap-3"><dt className="text-white/60">Per employee per month</dt><dd><Money value={quote.perEmployeeMonthly} /></dd></div>
+              </dl>
+            </div>
+            <ButtonLink to={`/signup?plan=${quote.recommended}&cycle=${quote.billingCycle}`} variant="inverse" className="mt-8 w-full" size="md">Start {quote.trialDays}-day free trial</ButtonLink>
+            <p className="mt-2 text-center text-xs text-white/50">No payment needed for the trial</p>
+          </div>
         )}
       </div>
     </div>
