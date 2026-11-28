@@ -25,7 +25,7 @@ _Last updated: 28 Nov 2026. Includes the November requirements, work management,
 
 ## Database
 
-- 14 SQL migrations.
+- 15 SQL migrations.
 - Every tenant table uses forced row-level security.
 - Composite tenant foreign keys.
 - Append-only audit, history, leave-ledger and salary tables.

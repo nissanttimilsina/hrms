@@ -463,6 +463,8 @@ The owner asked to "complete all the roadmap things" from the website, in this o
 
 **Website:** the nine modules are `available` in `features.js` with rewritten copy; `ai-hr-assistant` stays coming soon. The marketing mega-menu now lists more live items; it built cleanly but was not checked visually.
 
+**Website polish (pull request #3):** shorter hero with a lighter scene; a "one system" section linking the whole suite; scroll reveals (`Reveal`, `useInView` in `marketing/src/components/core.jsx`; only elements below the fold are hidden, so prerendered pages and no-JS visitors see everything) and count-up prices (`CountUp`) on the plan cards; the plan name on the dark Professional card was invisible and is fixed. Migration 015 updates the Professional and Business highlights to list the shipped modules, only where a Super Admin has not edited them. The `UI check` also opens the marketing site (`infrastructure/ci/marketing-screens.mjs`, served by `vite preview` on port 4176; use trailing-slash URLs there, because the preview server otherwise returns the homepage HTML for every path and React reports false hydration errors).
+
 ## 13. Integrations
 
 - **Email:**
