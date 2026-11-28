@@ -67,7 +67,7 @@ appraisalsRouter.get('/goals', requirePermission('appraisals:view'), validate({ 
     if (!emp || !(target === me || employeeInScope(req, req.scopes, emp))) throw NotFound('Employee');
     const goals = await app.Goal.findAll({ where: { employeeId: target, ...(req.query.cycleId && { cycleId: req.query.cycleId }) }, order: [['status', 'ASC'], ['dueDate', 'ASC'], ['createdAt', 'ASC']], transaction: t });
     const rights = goalRights(req, emp);
-    return goals.map((g) => goalView(g, { canEdit: rights.any }));
+    return goals.map((g) => goalView(g, { canEdit: rights.any, canChangeStatus: rights.manager || g.createdBy === req.auth.userId }));
   });
   return ok(res, out);
 }));

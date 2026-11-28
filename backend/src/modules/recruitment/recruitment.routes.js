@@ -392,6 +392,7 @@ recruitmentRouter.get('/interviews/:id', requireFeature('recruitment'), validate
     return interviewView(i, names, {
       candidate: { ...candView(c), coverNote: c.coverNote },
       canGiveFeedback: (mine || holds(req, 'recruitment:edit')) && i.status !== 'CANCELLED',
+      mine: (() => { const f = i.feedback.find((x) => x.authorId === req.auth.userId); return f ? { rating: f.rating, recommendation: f.recommendation, scores: f.scores, notes: f.notes } : null; })(),
       canManage: holds(req, 'recruitment:edit'),
     });
   });

@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AppShell, ToastProvider, Skeleton, Button, SubscriptionBanner, BrandProvider } from '@hrms/shared-ui';
-import { LayoutDashboard, Users, Building2, Clock, CalendarDays, Wallet, Megaphone, ShieldCheck, CreditCard, LifeBuoy, Settings as Cog, Bell, UserRound, ScrollText, BarChart3, Fingerprint, ListTodo, FileText, ClipboardCheck, TrendingUp, FolderKanban, Gauge, Receipt, FileSignature, Landmark } from 'lucide-react';
+import { LayoutDashboard, Users, Building2, Clock, CalendarDays, Wallet, Megaphone, ShieldCheck, CreditCard, LifeBuoy, Settings as Cog, Bell, UserRound, ScrollText, BarChart3, Fingerprint, ListTodo, FileText, ClipboardCheck, TrendingUp, FolderKanban, Gauge, Receipt, FileSignature, Landmark, Laptop, DoorOpen, Briefcase, GraduationCap, Target, ClipboardList, Heart, LineChart, Workflow, MessageCircleQuestion, CalendarClock } from 'lucide-react';
 import { AuthProvider, useAuth, api, dt } from './lib.jsx';
 import { Login, AcceptInvite, ForgotPassword, ResetPassword } from './pages/Auth.jsx';
 import { Dashboard } from './pages/Home.jsx';
@@ -13,6 +13,15 @@ import { PayrollRuns, PayrollRunDetail, PayrollSetup, MyPayslips, MyTax } from '
 import { MyExpenses, ExpenseDetail, Expenses, ExpenseSettings } from './pages/Expenses.jsx';
 import { MyLetters, Letters, VerifyLetter } from './pages/Letters.jsx';
 import { Reports } from './pages/Reports.jsx';
+import { Assets, AssetDetail, MyAssets } from './pages/Assets.jsx';
+import { Journeys, JourneyDetail, Checklists } from './pages/Onboarding.jsx';
+import { Jobs, JobDetail, CandidateDetail, Interviews, InterviewDetail, Careers, CareerJob } from './pages/Recruitment.jsx';
+import { MyTickets, TicketDetail, HelpdeskQueue, HelpdeskSettings } from './pages/Helpdesk.jsx';
+import { MyTraining, TrainingAdmin, CourseDetail } from './pages/Training.jsx';
+import { MyGoals, MyAppraisals, AppraisalDetail, Appraisals, CycleDetail } from './pages/Appraisals.jsx';
+import { Surveys, SurveyPage, Recognition } from './pages/Engagement.jsx';
+import { Workforce, PlanDetail } from './pages/Workforce.jsx';
+import { Requests, RequestDetail, RequestForms } from './pages/Workflows.jsx';
 import { Devices } from './pages/Devices.jsx';
 import { Tasks, TaskDetail, DailyReport, WorkReports, WorkReportDetail, Performance, EmployeePerformance, Projects } from './pages/Work.jsx';
 import { Access, Announcements, Billing, Support, SupportTicket, Settings, Audit, MyProfile } from './pages/Admin.jsx';
@@ -37,6 +46,16 @@ function buildNav(a) {
       f('payroll') && can('payroll:view') && { key: '/me/tax', label: 'My tax', icon: I(Landmark) },
       f('expenses') && can('expenses:create') && { key: '/me/expenses', label: 'My expenses', icon: I(Receipt) },
       can('letters:create') && { key: '/me/letters', label: 'My letters', icon: I(FileSignature) },
+      f('assets') && can('assets:view') && { key: '/me/assets', label: 'My assets', icon: I(Laptop) },
+      f('training') && can('training:view') && { key: '/me/training', label: 'My training', icon: I(GraduationCap) },
+      f('kpi_appraisal') && can('appraisals:view') && { key: '/me/goals', label: 'My goals', icon: I(Target) },
+      f('kpi_appraisal') && can('appraisals:view') && { key: '/me/appraisals', label: 'My reviews', icon: I(ClipboardCheck) },
+      f('workflows') && can('requests:create') && { key: '/requests', label: 'Requests', icon: I(Workflow) },
+      f('helpdesk') && can('helpdesk:create') && { key: '/me/helpdesk', label: 'Ask HR', icon: I(MessageCircleQuestion) },
+    ] },
+    f('engagement') && can('engagement:view') && { label: 'Together', items: [
+      { key: '/surveys', label: 'Surveys', icon: I(ClipboardList) },
+      { key: '/recognition', label: 'Recognition', icon: I(Heart) },
     ] },
     f('tasks') && { label: 'Work', items: [
       (wide('tasks:view') || (!me && can('tasks:view'))) && { key: '/tasks', label: 'Tasks', icon: I(ListTodo) },
@@ -47,6 +66,15 @@ function buildNav(a) {
     { label: 'People', items: [
       wide('employees:view') && { key: '/employees', label: 'Employees', icon: I(Users) },
       can('branches:view') && wide('employees:view') && { key: '/organization', label: 'Organization', icon: I(Building2) },
+      f('recruitment') && can('recruitment:view') && { key: '/recruitment', label: 'Recruitment', icon: I(Briefcase) },
+      f('recruitment') && !can('recruitment:view') && { key: '/interviews', label: 'My interviews', icon: I(CalendarClock) },
+      f('onboarding') && wide('onboarding:view') && { key: '/onboarding', label: 'Onboarding & exits', icon: I(DoorOpen) },
+      f('kpi_appraisal') && (wide('appraisals:edit') || can('appraisals:configure')) && { key: '/appraisals', label: 'Performance reviews', icon: I(Target) },
+      f('training') && (wide('training:view') || can('training:manage')) && { key: '/training', label: 'Training', icon: I(GraduationCap) },
+      f('assets') && wide('assets:view') && { key: '/assets', label: 'Assets', icon: I(Laptop) },
+      f('helpdesk') && can('helpdesk:manage') && { key: '/helpdesk', label: 'HR helpdesk', icon: I(LifeBuoy) },
+      f('workforce_planning') && can('workforce:view') && { key: '/workforce', label: 'Workforce planning', icon: I(LineChart) },
+      !me && f('workflows') && can('workflows:configure') && { key: '/requests', label: 'Requests', icon: I(Workflow) },
     ] },
     { label: 'Time & pay', items: [
       wide('attendance:view') && { key: '/attendance', label: 'Attendance', icon: I(Clock), locked: !f('attendance') },
@@ -110,6 +138,8 @@ function Shell() {
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/verify/:code" element={<VerifyLetter />} />
+        <Route path="/careers" element={<Careers />} />
+        <Route path="/careers/:slug" element={<CareerJob />} />
         <Route path="*" element={<Login />} />
       </Routes>
     );
@@ -177,6 +207,40 @@ function Shell() {
             <Route path="/settings" element={<Settings />} />
             <Route path="/audit" element={<Audit />} />
             <Route path="/reports" element={<Reports />} />
+            <Route path="/careers" element={<Careers />} />
+            <Route path="/careers/:slug" element={<CareerJob />} />
+            <Route path="/me/assets" element={<MyAssets />} />
+            <Route path="/assets" element={<Assets />} />
+            <Route path="/assets/:id" element={<AssetDetail />} />
+            <Route path="/onboarding" element={<Journeys />} />
+            <Route path="/onboarding/checklists" element={<Checklists />} />
+            <Route path="/onboarding/:id" element={<JourneyDetail />} />
+            <Route path="/recruitment" element={<Jobs />} />
+            <Route path="/recruitment/jobs/:id" element={<JobDetail />} />
+            <Route path="/recruitment/candidates/:id" element={<CandidateDetail />} />
+            <Route path="/interviews" element={<Interviews />} />
+            <Route path="/interviews/:id" element={<InterviewDetail />} />
+            <Route path="/me/helpdesk" element={<MyTickets />} />
+            <Route path="/me/helpdesk/:id" element={<TicketDetail />} />
+            <Route path="/helpdesk" element={<HelpdeskQueue />} />
+            <Route path="/helpdesk/settings" element={<HelpdeskSettings />} />
+            <Route path="/helpdesk/:id" element={<TicketDetail />} />
+            <Route path="/me/training" element={<MyTraining />} />
+            <Route path="/training" element={<TrainingAdmin />} />
+            <Route path="/training/courses/:id" element={<CourseDetail />} />
+            <Route path="/me/goals" element={<MyGoals />} />
+            <Route path="/me/appraisals" element={<MyAppraisals />} />
+            <Route path="/appraisals" element={<Appraisals />} />
+            <Route path="/appraisals/cycles/:id" element={<CycleDetail />} />
+            <Route path="/appraisals/:id" element={<AppraisalDetail />} />
+            <Route path="/surveys" element={<Surveys />} />
+            <Route path="/surveys/:id" element={<SurveyPage />} />
+            <Route path="/recognition" element={<Recognition />} />
+            <Route path="/workforce" element={<Workforce />} />
+            <Route path="/workforce/:id" element={<PlanDetail />} />
+            <Route path="/requests" element={<Requests />} />
+            <Route path="/requests/forms" element={<RequestForms />} />
+            <Route path="/requests/:id" element={<RequestDetail />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>

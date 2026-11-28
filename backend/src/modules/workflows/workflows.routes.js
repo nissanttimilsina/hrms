@@ -64,6 +64,11 @@ const defView = (d, extra = {}) => ({ id: d.id, name: d.name, description: d.des
 
 workflowsRouter.get('/templates', requirePermission('workflows:configure'), asyncHandler(async (req, res) => ok(res, WORKFLOW_TEMPLATES)));
 
+workflowsRouter.get('/roles', requirePermission('workflows:configure'), asyncHandler(async (req, res) => {
+  const roles = await req.tx((t) => app.Role.findAll({ attributes: ['key', 'name'], order: [['name', 'ASC']], transaction: t }));
+  return ok(res, roles.map((r) => ({ key: r.key, name: r.name })));
+}));
+
 workflowsRouter.get('/definitions', requirePermission('requests:view'), asyncHandler(async (req, res) => {
   const out = await req.tx(async (t) => {
     const rows = await app.WorkflowDefinition.findAll({ where: canConfigure(req) ? {} : { active: true }, order: [['active', 'DESC'], ['name', 'ASC']], transaction: t });

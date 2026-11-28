@@ -109,7 +109,8 @@ export function PlanCardsSkeleton() {
 
 /** Feature-by-plan comparison built from the live catalogue. */
 /** Plan entitlements that are built and usable today; everything else is shown as "Coming soon". */
-const SHIPPED = new Set(['employees', 'organization', 'ess', 'documents', 'reports', 'attendance', 'leave', 'payroll', 'shifts', 'biometric', 'reports_advanced', 'document_expiry_alerts', 'multi_branch']);
+const SHIPPED = new Set(['employees', 'organization', 'ess', 'documents', 'reports', 'attendance', 'leave', 'payroll', 'shifts', 'biometric', 'reports_advanced', 'document_expiry_alerts', 'multi_branch',
+  'tasks', 'expenses', 'recruitment', 'onboarding', 'performance', 'kpi_appraisal', 'training', 'assets', 'helpdesk', 'engagement', 'workforce_planning', 'workflows']);
 
 export function ComparisonTable({ plans }) {
   const all = useMemo(() => {

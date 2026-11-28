@@ -28,6 +28,7 @@ import { appraisalsRouter } from '../modules/appraisals/appraisals.routes.js';
 import { engagementRouter } from '../modules/engagement/engagement.routes.js';
 import { workforceRouter } from '../modules/workforce/workforce.routes.js';
 import { workflowsRouter } from '../modules/workflows/workflows.routes.js';
+import { directoryRouter } from '../modules/directory/directory.routes.js';
 
 /**
  * /api/v1 route map.
@@ -82,6 +83,7 @@ export function apiRouter() {
   tenant.use('/engagement', engagementRouter);
   tenant.use('/workforce', workforceRouter);
   tenant.use('/workflows', workflowsRouter);
+  tenant.use('/directory', directoryRouter);
   tenant.use('/', workspaceRouter); // /dashboard, /announcements, /notifications, /settings
   r.use(tenant);
 

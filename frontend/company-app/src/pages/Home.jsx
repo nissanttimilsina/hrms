@@ -1,3 +1,4 @@
+import { ForYou } from './ForYou.jsx';
 import { Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
@@ -219,6 +220,7 @@ export function Dashboard() {
         </>} />
 
       <div className="space-y-8">
+        <ForYou />
         {me && (
           <section className="space-y-4">
             <div className={cn('grid grid-cols-1 [&>*]:min-w-0 gap-4', tasksOn ? 'lg:grid-cols-[1.25fr_1fr_1.25fr]' : '')}>
