@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { ICONS } from './icons.js';
 import ReactMarkdown from 'react-markdown';
@@ -11,6 +11,69 @@ export const Icon = ({ name, className = 'size-5', ...p }) => {
   const C = ICONS[name] ?? ICONS.Circle;
   return <C className={className} aria-hidden="true" {...p} />;
 };
+
+// --------------------------------------------------------------------------- motion
+const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+/**
+ * Calls back once when the element first scrolls into view. Elements already on screen at load report
+ * "inView" immediately, so nothing that is visible on the prerendered page ever disappears.
+ */
+export function useInView(ref, { margin = '0px 0px -12% 0px', play = false } = {}) {
+  const [state, setState] = useState('ssr'); // ssr → (below | in)
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined' || reducedMotion()) { setState('in'); return undefined; }
+    const r = el.getBoundingClientRect();
+    if (r.top < window.innerHeight * 0.92) {
+      // `play`: content that arrives after load (e.g. plans from the API) animates even when already on screen.
+      if (!play) { setState('in'); return undefined; }
+      setState('below');
+      const id = requestAnimationFrame(() => requestAnimationFrame(() => setState('in')));
+      return () => cancelAnimationFrame(id);
+    }
+    setState('below');
+    const io = new IntersectionObserver(([e]) => { if (e.isIntersecting) { setState('in'); io.disconnect(); } }, { rootMargin: margin });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [ref, margin, play]);
+  return state;
+}
+
+/** Fades and lifts its content in when it scrolls into view. `delay` in seconds staggers siblings. */
+export function Reveal({ as: Tag = 'div', delay = 0, play = false, className, style, children, ...rest }) {
+  const ref = useRef(null);
+  const v = useInView(ref, { play });
+  return <Tag ref={ref} className={cn(className, v === 'below' && 'reveal-wait', v === 'in' && 'reveal-go')} style={{ ...style, '--d': `${delay}s` }} {...rest}>{children}</Tag>;
+}
+
+/**
+ * A number that counts up when it scrolls into view and glides to a new value when it changes
+ * (monthly ↔ annual). Server render and no-JS show the final value.
+ */
+export function CountUp({ value, format = (n) => String(n), duration = 900, play = false }) {
+  const ref = useRef(null);
+  const v = useInView(ref, { margin: '0px 0px -8% 0px', play });
+  const [shown, setShown] = useState(value);
+  const from = useRef(value); // the value currently on screen
+  useEffect(() => {
+    if (v === 'below') { from.current = 0; setShown(0); return undefined; }
+    if (v !== 'in') return undefined;
+    const start = from.current; // 0 if it waited below the fold, otherwise the previous price
+    if (start === value || reducedMotion()) { from.current = value; setShown(value); return undefined; }
+    let raf; const t0 = performance.now();
+    const tick = (t) => {
+      const k = Math.min(1, (t - t0) / duration);
+      const e = 1 - (1 - k) ** 3;
+      const n = Math.round(start + (value - start) * e);
+      setShown(n); from.current = n;
+      if (k < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [v, value, duration]);
+  return <span ref={ref} className="tabular-nums">{format(shown)}</span>;
+}
 
 // --------------------------------------------------------------------------- SEO (works in prerender + browser)
 export const HeadContext = createContext(null);

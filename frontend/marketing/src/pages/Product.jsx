@@ -38,7 +38,7 @@ export function Features() {
   const cats = FEATURE_CATEGORIES.filter((c) => live.some((f) => f.category === c));
   return (
     <>
-      <Seo title="Features" description="Employee records, attendance, fingerprint devices, leave, shifts, Nepal payroll, self-service and reports in one HR system." path="/features" />
+      <Seo title="Features" description="Employee records, attendance, fingerprint devices, leave, shifts, Nepal payroll, recruitment, onboarding, performance reviews, training, assets, helpdesk and more in one HR system." path="/features" />
       <PageHero eyebrow="Features" title="Everything you need to run HR and payroll" intro="Every module works from the same employee record, so attendance becomes leave balances and leave becomes payroll, without typing anything twice." />
       <section className="bg-white py-16 sm:py-24">
         <Container>

@@ -78,10 +78,21 @@ jobs:
           npm run build -w company-app
           cd company-app && (nohup npx vite preview --port 4175 --strictPort > /tmp/web.log 2>&1 &)
           for i in $(seq 1 30); do curl -sf localhost:4175/ >/dev/null && break; sleep 1; done
+      - name: Build and serve the marketing site
+        working-directory: frontend
+        env:
+          VITE_MARKETING_HOST: www.hrms.test
+        run: |
+          npm run build -w marketing
+          cd marketing && (nohup npx vite preview --port 4176 --strictPort > /tmp/site.log 2>&1 &)
+          for i in $(seq 1 30); do curl -sf localhost:4176/ >/dev/null && break; sleep 1; done
       - name: Screenshots
         run: |
           npm i --prefix /tmp/pw --no-save --no-audit --no-fund playwright-core@1
           node infrastructure/ci/ui-screens.mjs /tmp/pw /tmp/ui-fixtures.json /tmp/screens
+      - name: Marketing screenshots
+        if: always()
+        run: node infrastructure/ci/marketing-screens.mjs /tmp/pw /tmp/screens
       - name: Logs
         if: always()
         run: tail -n 80 /tmp/api.log || true
@@ -89,7 +100,7 @@ jobs:
         if: always()
         run: |
           echo "::group::screens.tar.gz base64"
-          cd /tmp/screens && for f in report.json phone-*.jpg desktop-n-*.jpg; do echo "BEGIN-FILE $f"; base64 -w 120 "$f"; echo "END-FILE"; done
+          cd /tmp/screens && for f in report.json phone-*.jpg desktop-n-*.jpg mk-*.jpg; do echo "BEGIN-FILE $f"; base64 -w 120 "$f"; echo "END-FILE"; done
           echo "::endgroup::"
       - uses: actions/upload-artifact@v4
         if: always()

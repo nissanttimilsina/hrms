@@ -1,7 +1,7 @@
 /**
  * The hero: one working day flowing through the product, played once on load.
  * Device punches arrive → the month's register fills → the month closes into a Nepal payslip.
- * Figures are a worked example for FY 2083/84 (SSF member, so the 1% social security tax is waived).
+ * Figures are a worked example for FY 2083/84: gross 54,000 (basic 45,000 + allowance 9,000), SSF 11% on basic.
  */
 import { cn } from '@hrms/shared-ui';
 import { Icon } from './core.jsx';
@@ -12,7 +12,6 @@ const PUNCHES = [
   ['09:52', 'Sita Rai', 'In', 'on time'],
   ['10:04', 'Ram Thapa', 'In', 'within grace'],
   ['10:21', 'Bikash KC', 'In', 'late 11 min'],
-  ['17:36', 'Sita Rai', 'Out', '7 h 44 m'],
 ];
 
 // 4 people × 15 working days of Mangsir: P present, L late, V leave, O weekly off
@@ -73,14 +72,14 @@ export function HeroScene() {
           <p className="text-xs text-white/60">Mangsir 2083</p>
         </div>
         <dl className="mt-3 space-y-1.5 text-sm">
-          {[['Basic salary', '45,000'], ['Dearness allowance', '9,000'], ['SSF, employee 11%', '−4,950'], ['Social security tax 1%', 'waived, SSF member']].map(([k, v], i) => (
+          {[['Gross salary', '54,000'], ['SSF, employee 11%', '−4,950']].map(([k, v], i) => (
             <div key={k} className="scene-in flex justify-between gap-4" style={d(3 + i * 0.12)}>
-              <dt className="text-white/70">{k}</dt><dd className={cn('tabular-nums', v.startsWith('waived') && 'text-marigold')}>{v}</dd>
+              <dt className="text-white/70">{k}</dt><dd className="tabular-nums">{v}</dd>
             </div>
           ))}
         </dl>
-        <div className="mt-3 h-px bg-white/15"><div className="scene-draw h-px bg-marigold" style={d(3.5)} /></div>
-        <div className="scene-in mt-3 flex items-baseline justify-between" style={d(3.7)}>
+        <div className="mt-3 h-px bg-white/15"><div className="scene-draw h-px bg-marigold" style={d(3.3)} /></div>
+        <div className="scene-in mt-3 flex items-baseline justify-between" style={d(3.45)}>
           <span className="text-sm text-white/70">Net pay</span>
           <span className="text-2xl font-semibold tabular-nums tracking-tight">NPR 49,050</span>
         </div>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Container, Section, Seo, ButtonLink, Icon, Pill, CtaBand } from '../components/core.jsx';
+import { Container, Section, Seo, ButtonLink, Icon, Pill, CtaBand, Reveal } from '../components/core.jsx';
 import { PlanCards, PlanCardsSkeleton, CycleToggle, FaqList, usePlans, useContent } from '../components/commerce.jsx';
 import { HeroScene } from '../components/scene.jsx';
 import { ProductTour } from '../components/tour.jsx';
@@ -26,6 +26,13 @@ const MONTH = [
   ['Calculate', 'Payable days, overtime, tax and SSF for everyone in one step.'],
   ['Check and approve', 'Anything unusual is flagged; a second person approves.'],
   ['Pay and publish', 'Bank sheet for the transfer; payslips go to every phone.'],
+];
+
+const SUITE = [
+  ['Hire and onboard', 'UserPlus', [['Recruitment', 'recruitment'], ['Onboarding and exits', 'onboarding-offboarding'], ['Documents', 'document-management']]],
+  ['Run the month', 'Wallet', [['Attendance and devices', 'attendance-management'], ['Leave', 'leave-management'], ['Nepal payroll', 'payroll-management'], ['Expense claims', 'expense-management']]],
+  ['Grow your people', 'Target', [['Tasks and daily reports', 'task-management'], ['Performance reviews', 'performance-management'], ['Training', 'training-development'], ['Surveys and recognition', 'employee-engagement']]],
+  ['Keep HR running', 'LifeBuoy', [['HR helpdesk', 'helpdesk'], ['Assets', 'asset-management'], ['Request forms', 'custom-workflows'], ['Workforce planning', 'workforce-planning']]],
 ];
 
 function Announcement() {
@@ -63,7 +70,7 @@ export default function Home() {
 
   return (
     <>
-      <Seo description="Attendance, leave and Nepal payroll in one HR system: Bikram Sambat months, SSF and income tax, fingerprint devices and a self-service app for every employee. Start a free trial." path="/" />
+      <Seo description="HR and payroll for Nepal in one system: attendance and fingerprint devices, leave, payroll with SSF and income tax in Bikram Sambat, recruitment, onboarding, reviews, training and an app for every employee. Start a free trial." path="/" />
 
       {/* hero */}
       <section className="relative overflow-hidden bg-[linear-gradient(180deg,#f4f7ff_0%,#ffffff_70%)]">
@@ -71,34 +78,60 @@ export default function Home() {
           <div className="scene-in" style={{ '--d': '0s' }}>
             <Announcement />
             <h1 className="text-[2.6rem] font-semibold leading-[1.05] tracking-[-0.035em] text-ink-900 sm:text-6xl lg:text-[4.1rem]">
-              Attendance, leave and payroll that already know Nepal.
+              HR and payroll that already know Nepal.
             </h1>
-            <p className="mt-6 max-w-xl text-lg leading-relaxed text-ink-700 sm:text-xl">
-              From the first punch at the gate to the payslip on every phone, with Bikram Sambat months, SSF and income tax worked out for you, across every branch.
+            <p className="mt-6 max-w-lg text-lg leading-relaxed text-ink-700 sm:text-xl">
+              Attendance, leave, payroll and everyday HR in one place, with Bikram Sambat months, SSF and tax worked out for you.
             </p>
             <div className="mt-9 flex flex-col gap-3 sm:flex-row">
               <ButtonLink to="/signup">Start free trial</ButtonLink>
               <ButtonLink to="/demo" variant="secondary">Book a demo</ButtonLink>
             </div>
-            <p className="mt-4 text-sm text-ink-500">No payment details needed. Your data stays separate from every other company.</p>
+            <p className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink-500">
+              {['14-day free trial', 'No card needed', 'Prices in NPR'].map((t) => <span key={t} className="inline-flex items-center gap-1.5"><Icon name="Check" className="size-3.5 text-success-600" />{t}</span>)}
+            </p>
           </div>
           <HeroScene />
+        </Container>
+      </section>
+
+      {/* the whole suite */}
+      <section className="bg-white py-20 sm:py-28">
+        <Container>
+          <Reveal className="max-w-2xl">
+            <h2 className="text-3xl font-semibold tracking-tight text-ink-900 sm:text-[2.6rem] sm:leading-[1.1]">One system, from the first interview to the last payslip</h2>
+            <p className="mt-4 text-lg text-ink-700">Start with attendance and payroll. Switch on the rest when you need it.</p>
+          </Reveal>
+          <div className="mt-12 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4 [&>*]:min-w-0">
+            {SUITE.map(([title, icon, items], i) => (
+              <Reveal key={title} delay={i * 0.08} className="rounded-2xl border border-line bg-canvas p-6">
+                <span className="grid size-10 place-items-center rounded-xl bg-brand-50 text-brand-600"><Icon name={icon} className="size-5" /></span>
+                <h3 className="mt-5 font-semibold text-ink-900">{title}</h3>
+                <ul className="mt-3 space-y-2">
+                  {items.map(([label, slug]) => (
+                    <li key={slug}><Link to={`/features/${slug}`} className="group inline-flex items-center gap-1.5 text-sm text-ink-700 hover:text-brand-700">{label}<Icon name="ArrowRight" className="size-3.5 -translate-x-1 opacity-0 transition group-hover:translate-x-0 group-hover:opacity-100" /></Link></li>
+                  ))}
+                </ul>
+              </Reveal>
+            ))}
+          </div>
+          <p className="mt-8 text-sm"><Link to="/features" className="font-medium text-brand-700 hover:text-brand-600">See every feature</Link></p>
         </Container>
       </section>
 
       {/* before / after */}
       <section className="border-y border-line bg-white py-20 sm:py-28">
         <Container>
-          <h2 className="max-w-2xl text-3xl font-semibold tracking-tight text-ink-900 sm:text-[2.6rem] sm:leading-[1.1]">What changes in the first month</h2>
+          <Reveal as="h2" className="max-w-2xl text-3xl font-semibold tracking-tight text-ink-900 sm:text-[2.6rem] sm:leading-[1.1]">What changes in the first month</Reveal>
           <div className="mt-12 hidden grid-cols-2 gap-10 border-b border-line pb-3 text-sm font-medium text-ink-500 md:grid">
             <p>How it usually works</p><p className="text-brand-700">With Lishnu HRMS</p>
           </div>
           <ul>
-            {SWITCH.map(([before, after]) => (
-              <li key={before} className="grid gap-2 border-b border-line py-6 md:grid-cols-2 md:gap-10">
+            {SWITCH.map(([before, after], i) => (
+              <Reveal as="li" delay={i * 0.06} key={before} className="grid gap-2 border-b border-line py-6 md:grid-cols-2 md:gap-10">
                 <p className="text-ink-500"><span className="mb-1 block text-xs font-medium text-ink-400 md:hidden">Before</span>{before}</p>
                 <p className="text-lg text-ink-900"><span className="mb-1 block text-xs font-medium text-brand-700 md:hidden">With Lishnu HRMS</span>{after}</p>
-              </li>
+              </Reveal>
             ))}
           </ul>
         </Container>
@@ -107,10 +140,10 @@ export default function Home() {
       {/* product tour */}
       <section className="bg-canvas py-20 sm:py-28">
         <Container>
-          <div className="mb-10 max-w-2xl">
-            <h2 className="text-3xl font-semibold tracking-tight text-ink-900 sm:text-[2.6rem] sm:leading-[1.1]">The everyday HR work, in one place</h2>
-            <p className="mt-4 text-lg text-ink-700">Pick an area to see the screen your team will use.</p>
-          </div>
+          <Reveal className="mb-10 max-w-2xl">
+            <h2 className="text-3xl font-semibold tracking-tight text-ink-900 sm:text-[2.6rem] sm:leading-[1.1]">See the screens your team will use</h2>
+            <p className="mt-4 text-lg text-ink-700">Pick an area.</p>
+          </Reveal>
           <ProductTour />
         </Container>
       </section>
@@ -126,11 +159,11 @@ export default function Home() {
             </div>
             <ol className="grid gap-px overflow-hidden rounded-2xl border border-line bg-line sm:grid-cols-2">
               {MONTH.map(([t, dsc], i) => (
-                <li key={t} className="bg-white p-6 sm:p-8">
+                <Reveal as="li" delay={i * 0.08} key={t} className="bg-white p-6 sm:p-8">
                   <span className="text-sm font-semibold tabular-nums text-brand-600">{i + 1}</span>
                   <p className="mt-3 text-lg font-semibold text-ink-900">{t}</p>
                   <p className="mt-1.5 text-ink-500">{dsc}</p>
-                </li>
+                </Reveal>
               ))}
             </ol>
           </div>
@@ -147,10 +180,10 @@ export default function Home() {
             <p className="mt-4 max-w-md text-lg text-white/70">Not a foreign HR tool with a currency switch. The calendar, the law and the tax year are the starting point.</p>
           </div>
           <dl className="divide-y divide-white/10 border-y border-white/10">
-            {NEPAL.map(([t, dsc]) => (
-              <div key={t} className="grid gap-1 py-5 sm:grid-cols-[0.8fr_1.2fr] sm:gap-8">
+            {NEPAL.map(([t, dsc], i) => (
+              <Reveal key={t} delay={i * 0.06} className="grid gap-1 py-5 sm:grid-cols-[0.8fr_1.2fr] sm:gap-8">
                 <dt className="font-semibold">{t}</dt><dd className="text-white/70">{dsc}</dd>
-              </div>
+              </Reveal>
             ))}
           </dl>
         </Container>
@@ -176,10 +209,10 @@ export default function Home() {
       <section className="border-t border-line bg-canvas py-20 sm:py-28">
         <Container>
           <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
-            <div className="max-w-xl">
+            <Reveal className="max-w-xl">
               <h2 className="text-3xl font-semibold tracking-tight text-ink-900 sm:text-[2.6rem] sm:leading-[1.1]">Plans for 5 people or 500</h2>
               <p className="mt-4 text-lg text-ink-700">Prices in NPR before 13% VAT. Every plan starts with a free trial.</p>
-            </div>
+            </Reveal>
             <CycleToggle cycle={cycle} setCycle={setCycle} maxSavePercent={maxSave} />
           </div>
           <div className="mt-12">{isPending || !plans ? <PlanCardsSkeleton /> : <PlanCards plans={plans} cycle={cycle} />}</div>

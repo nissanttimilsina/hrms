@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Badge, Button, Checkbox, Field, Input, Select, Skeleton, Textarea, cn } from '@hrms/shared-ui';
 import { api, formatPrice, getUtm, SITE } from '../lib/site.js';
-import { Icon, ButtonLink, Check, Markdown } from './core.jsx';
+import { Icon, ButtonLink, Check, Markdown, Reveal, CountUp } from './core.jsx';
 import { FEATURES } from '../content/features.js';
 import { INDUSTRIES } from '../content/industries.js';
 
@@ -73,21 +73,21 @@ export function PlanCards({ plans, cycle, compact }) {
   const popular = 'PROFESSIONAL';
   return (
     <div className={cn('grid gap-5', compact ? 'md:grid-cols-2 lg:grid-cols-4' : 'md:grid-cols-2 lg:grid-cols-4')}>
-      {plans.map((p) => {
+      {plans.map((p, i) => {
         const price = cycle === 'ANNUAL' ? p.prices.annual : p.prices.monthly;
         const isPopular = p.code === popular;
         return (
-          <div key={p.code} className={cn('relative flex flex-col rounded-2xl border p-6', isPopular ? 'border-night bg-night text-white shadow-[0_30px_70px_-35px_rgba(11,26,63,.8)] [&_.text-ink-900]:text-white [&_.text-ink-500]:text-white/65 [&_.text-ink-400]:text-white/50 [&_.text-ink-700]:text-white/85 [&_svg.text-success-600]:text-marigold' : 'border-line bg-white')}>
+          <Reveal key={p.code} play delay={i * 0.09} className={cn('relative flex flex-col rounded-2xl border p-6', isPopular ? 'border-night bg-night text-white shadow-[0_30px_70px_-35px_rgba(11,26,63,.8)] [&_.text-ink-900]:text-white [&_.text-ink-500]:text-white/65 [&_.text-ink-400]:text-white/50 [&_.text-ink-700]:text-white/85 [&_svg.text-success-600]:text-marigold' : 'border-line bg-white')}>
             {isPopular && <span className="absolute right-5 top-5 rounded-full bg-marigold px-2.5 py-0.5 text-xs font-semibold text-night">Most chosen</span>}
-            <h3 className="text-lg font-semibold">{p.name}</h3>
+            <h3 className="text-lg font-semibold text-ink-900">{p.name}</h3>
             <p className="mt-1 min-h-10 text-sm text-ink-500">{p.limits.employees ? `Up to ${p.limits.employees} employees · ${p.limits.branches} branch${p.limits.branches > 1 ? 'es' : ''}` : 'For larger and complex organisations'}</p>
             <div className="mt-4 min-h-16">
               {p.contactSales || price == null ? (
                 <p className="text-3xl font-semibold text-ink-900">Custom</p>
               ) : (
                 <>
-                  <p className="whitespace-nowrap"><span className="text-[1.65rem] font-semibold tabular-nums text-ink-900">NPR {formatPrice(price)}</span><span className="text-sm text-ink-500"> /{cycle === 'ANNUAL' ? 'yr' : 'mo'}</span></p>
-                  {cycle === 'ANNUAL' && p.annualSavings?.amount > 0 && <p className="text-sm text-success-600">Save NPR {formatPrice(p.annualSavings.amount)} a year</p>}
+                  <p className="whitespace-nowrap"><span className="text-[1.65rem] font-semibold tabular-nums text-ink-900">NPR <CountUp play value={price} format={formatPrice} duration={1100} /></span><span className="text-sm text-ink-500"> /{cycle === 'ANNUAL' ? 'yr' : 'mo'}</span></p>
+                  {cycle === 'ANNUAL' && p.annualSavings?.amount > 0 && <p className="text-sm text-success-600">Save NPR <CountUp play value={p.annualSavings.amount} format={formatPrice} duration={700} /> a year</p>}
                   {cycle === 'MONTHLY' && <p className="text-xs text-ink-400">+13% VAT</p>}
                 </>
               )}
@@ -96,7 +96,7 @@ export function PlanCards({ plans, cycle, compact }) {
               {p.contactSales ? 'Talk to sales' : `Start ${p.trialDays}-day free trial`}
             </ButtonLink>
             <ul className="mt-6 space-y-2.5 text-sm">{(p.highlights ?? []).map((h) => <Check key={h}>{h}</Check>)}</ul>
-          </div>
+          </Reveal>
         );
       })}
     </div>

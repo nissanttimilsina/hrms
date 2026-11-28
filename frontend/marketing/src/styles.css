@@ -40,6 +40,12 @@
   .live-dot { animation: none; }
 }
 
+/* Scroll reveal. Only elements that start below the fold get .reveal-wait (added by JS after load),
+   so the prerendered page and no-JS visitors always see everything. */
+.reveal-wait { opacity: 0; transform: translateY(22px); }
+.reveal-go { opacity: 1; transform: none; transition: opacity .7s cubic-bezier(.2,.7,.2,1), transform .7s cubic-bezier(.2,.7,.2,1); transition-delay: var(--d, 0s); }
+@media (prefers-reduced-motion: reduce) { .reveal-wait { opacity: 1; transform: none; } .reveal-go { transition: none; } }
+
 /* header dropdown: answers a hover/click, so a short drop-in is fine */
 @keyframes menu-in { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
 .menu-in { animation: menu-in .18s cubic-bezier(.2,.7,.2,1) both; }
