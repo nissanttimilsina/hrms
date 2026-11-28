@@ -51,9 +51,11 @@ export function Reveal({ as: Tag = 'div', delay = 0, play = false, className, st
  * A number that counts up when it scrolls into view and glides to a new value when it changes
  * (monthly ↔ annual). Server render and no-JS show the final value.
  */
-export function CountUp({ value, format = (n) => String(n), duration = 900, play = false }) {
+export function CountUp({ value, format = (n) => String(n), duration = 900, play = false, onScroll = true }) {
   const ref = useRef(null);
-  const v = useInView(ref, { margin: '0px 0px -8% 0px', play });
+  const seen = useInView(ref, { margin: '0px 0px -8% 0px', play });
+  // onScroll=false: never wait for the viewport (no count from zero), only glide when the value changes.
+  const v = onScroll ? seen : 'in';
   const [shown, setShown] = useState(value);
   const from = useRef(value); // the value currently on screen
   useEffect(() => {

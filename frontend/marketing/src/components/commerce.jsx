@@ -169,7 +169,7 @@ function Stepper({ label, value, onChange, min = 1, max = 100000 }) {
 }
 
 const Money = ({ value, className }) => (
-  <span className={cn('tabular-nums', className)}>NPR <CountUp value={Math.round((value ?? 0) * 100)} format={(c) => formatPrice(c / 100)} duration={600} /></span>
+  <span className={cn('tabular-nums', className)}>NPR <CountUp onScroll={false} value={Math.round((value ?? 0) * 100)} format={(c) => formatPrice(c / 100)} duration={600} /></span>
 );
 
 export function PricingCalculator() {
@@ -222,17 +222,17 @@ export function PricingCalculator() {
             {CALC_GROUPS.map(([title, items]) => (
               <div key={title}>
                 <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">{title}</p>
-                <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3 [&>*]:min-w-0">
+                <div className="mt-2 grid grid-cols-2 gap-2 [&>*]:min-w-0">
                   {items.map(([k, label, icon]) => {
                     const on = form.modules.includes(k);
                     return (
                       <button key={k} type="button" role="checkbox" aria-checked={on} onClick={() => toggle(k)}
-                        className={cn('group flex items-center gap-2.5 rounded-xl border px-3 py-2.5 text-left text-sm transition duration-200 active:scale-[0.97]',
+                        className={cn('group flex min-h-12 items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left text-[13px] sm:px-3 sm:text-sm transition duration-200 active:scale-[0.97]',
                           on ? 'border-brand-600 bg-brand-50 text-ink-900 shadow-[0_0_0_1px_var(--color-brand-600)]' : 'border-line bg-white text-ink-700 hover:border-line-strong hover:bg-canvas')}>
                         <span className={cn('grid size-7 shrink-0 place-items-center rounded-lg transition-colors duration-200', on ? 'bg-brand-600 text-white' : 'bg-subtle text-ink-500 group-hover:text-ink-700')}>
                           <Icon name={on ? 'Check' : icon} className="size-4" />
                         </span>
-                        <span className="min-w-0 truncate font-medium">{label}</span>
+                        <span className="min-w-0 font-medium leading-tight">{label}</span>
                       </button>
                     );
                   })}
@@ -253,7 +253,7 @@ export function PricingCalculator() {
         {/* plan ladder: the pill slides to the recommended plan */}
         <div className="relative mt-3 grid grid-cols-4 rounded-xl bg-white/5 p-1 text-center text-xs font-medium">
           <span aria-hidden className="absolute inset-y-1 left-1 w-[calc(25%-2px)] rounded-lg bg-white transition-transform duration-500 ease-[cubic-bezier(.2,.8,.2,1)]" style={{ transform: `translateX(${rung * 100}%)`, opacity: quote ? 1 : 0 }} />
-          {LADDER.map(([c, l], k) => <span key={c} className={cn('relative z-10 truncate px-1 py-2 transition-colors duration-300', k === rung && quote ? 'text-ink-900' : 'text-white/55')}>{l}</span>)}
+          {LADDER.map(([c, l], k) => <span key={c} title={l} className={cn('relative z-10 px-0.5 py-2 transition-colors duration-300', k === rung && quote ? 'text-ink-900' : 'text-white/55')}>{c === 'PROFESSIONAL' ? <><span className="sm:hidden">Pro</span><span className="hidden sm:inline">{l}</span></> : l}</span>)}
         </div>
 
         {!quote ? <div className="mt-6 h-40 animate-pulse rounded-xl bg-white/5" /> : quote.contactSales ? (
