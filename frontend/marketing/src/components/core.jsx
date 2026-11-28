@@ -191,23 +191,45 @@ const MenuItem = ({ to, icon, name, text }) => (
   </Link>
 );
 
+// The product menu groups features the way buyers think about them. Any available feature not listed
+// here still appears, in the last group, so a newly shipped module is never missing from the menu.
+const MENU_GROUPS = [
+  ['People and hiring', ['employee-management', 'recruitment', 'onboarding-offboarding', 'document-management', 'organization-management']],
+  ['Time and pay', ['attendance-management', 'biometric-attendance', 'leave-management', 'shift-management', 'payroll-management', 'expense-management']],
+  ['Performance and growth', ['task-management', 'performance-management', 'training-development', 'employee-engagement']],
+  ['HR operations', ['employee-self-service', 'helpdesk', 'asset-management', 'custom-workflows', 'workforce-planning', 'hr-analytics']],
+];
+
+const MenuRow = ({ f }) => (
+  <Link to={`/features/${f.slug}`} title={f.tagline} className="group flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors hover:bg-canvas">
+    <span className="grid size-7 shrink-0 place-items-center rounded-md bg-brand-50 text-brand-600 transition-colors group-hover:bg-brand-600 group-hover:text-white"><Icon name={f.icon} className="size-4" /></span>
+    <span className="min-w-0 truncate text-sm text-ink-700 group-hover:text-ink-900">{f.name}</span>
+  </Link>
+);
+
 function ProductMenu() {
   const live = FEATURES.filter((f) => f.status === 'available');
   const soon = FEATURES.filter((f) => f.status !== 'available');
+  const placed = new Set(MENU_GROUPS.flatMap(([, slugs]) => slugs));
+  const groups = MENU_GROUPS.map(([title, slugs], k) => [
+    title,
+    [...slugs.map((sl) => live.find((f) => f.slug === sl)).filter(Boolean), ...(k === MENU_GROUPS.length - 1 ? live.filter((f) => !placed.has(f.slug)) : [])],
+  ]).filter(([, items]) => items.length);
   return (
-    <div className="grid grid-cols-[1fr_17rem] gap-8 py-6">
-      <div>
-        <p className="px-3 text-sm text-ink-500">Available today</p>
-        <div className="mt-2 grid grid-cols-2 gap-x-4">
-          {live.map((f) => <MenuItem key={f.slug} to={`/features/${f.slug}`} icon={f.icon} name={f.name} text={f.tagline} />)}
-        </div>
+    <div className="py-6">
+      <div className="grid grid-cols-4 gap-6">
+        {groups.map(([title, items]) => (
+          <div key={title} className="min-w-0">
+            <p className="px-2 text-xs font-semibold uppercase tracking-wide text-ink-500">{title}</p>
+            <div className="mt-2 space-y-0.5">{items.map((f) => <MenuRow key={f.slug} f={f} />)}</div>
+          </div>
+        ))}
       </div>
-      <div className="flex flex-col rounded-2xl bg-canvas p-5">
-        <p className="text-sm text-ink-500">On the roadmap</p>
-        <ul className="mt-3 space-y-2 text-sm">
-          {soon.map((f) => <li key={f.slug}><Link to={`/features/${f.slug}`} className="text-ink-700 hover:text-ink-900">{f.name}</Link></li>)}
-        </ul>
-        <div className="mt-auto space-y-2 border-t border-line pt-4 text-sm font-medium">
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-line px-2 pt-4 text-sm">
+        <p className="text-ink-500">
+          {soon.length > 0 && <>Coming next: {soon.map((f, k) => <span key={f.slug}>{k > 0 && ', '}<Link to={`/features/${f.slug}`} className="text-ink-700 hover:text-ink-900">{f.name}</Link></span>)}</>}
+        </p>
+        <div className="flex items-center gap-5 font-medium">
           <Link to="/features" className="flex items-center gap-1.5 text-brand-700 hover:text-brand-600">All features<Icon name="ArrowRight" className="size-4" /></Link>
           <Link to="/pricing" className="flex items-center gap-1.5 text-brand-700 hover:text-brand-600">Compare plans<Icon name="ArrowRight" className="size-4" /></Link>
         </div>

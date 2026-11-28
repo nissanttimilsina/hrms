@@ -25,6 +25,18 @@ for (const [vp, size] of Object.entries(VIEWPORTS)) {
     await page.goto(BASE + path, { waitUntil: 'networkidle' });
     await page.waitForTimeout(900);
     await page.screenshot({ path: join(outDir, `mk-${vp}-${name}-top.jpg`), type: 'jpeg', quality: 70 });
+    if (name === 'home' && vp === 'desktop') {
+      // The mega menus, opened by hovering like a visitor would.
+      for (const label of ['Product', 'Industries']) {
+        await page.getByRole('button', { name: label }).hover();
+        await page.waitForTimeout(500);
+        await page.screenshot({ path: join(outDir, `mk-${vp}-menu-${label.toLowerCase()}.jpg`), type: 'jpeg', quality: 75 });
+        const box = await page.evaluate(() => { const el = document.querySelector('.menu-in'); return el ? el.getBoundingClientRect().bottom : 0; });
+        if (box > size.height) issues.push(`${label} menu runs past the bottom of the screen (${Math.round(box)} > ${size.height})`);
+        await page.mouse.move(5, size.height - 5);
+        await page.waitForTimeout(300);
+      }
+    }
     if (name === 'home') {
       // Catch the pricing cards mid-animation, to show the count-up is happening.
       await page.locator('text=Plans for 5 people or 500').scrollIntoViewIfNeeded();
